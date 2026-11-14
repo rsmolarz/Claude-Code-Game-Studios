@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>OCTOMON</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --night:#141b2e; --panel:#1c2540; --edge:#33406b; --ink:#101728;
+    --moss:#3f7d3a; --moss-dark:#2b5a29; --amber:#f2a63b; --coil:#8b5fd6;
+    --bone:#f4efe2; --water:#2f6bb5; --sand:#e3b775; --brick:#7d6a55;
+    --forest:#16331a; --muted:#9fb0c9; --coin:#f2d24b;
+    --display:'Silkscreen', ui-monospace, 'Courier New', monospace;
+    --body:'Space Grotesk', system-ui, -apple-system, sans-serif;
+    box-sizing:border-box;
+    padding-top:env(safe-area-inset-top, 0px);
+    padding-bottom:env(safe-area-inset-bottom, 0px);
+  }
+  *{box-sizing:border-box;}
+  html{scroll-padding-top:env(safe-area-inset-top, 0px);}
+  body{margin:0; padding:14px;
+    background:radial-gradient(circle at 20% 0%, #22304f 0%, transparent 55%), var(--night);
+    color:var(--bone); font-family:var(--body); display:flex; flex-direction:column; align-items:center;}
+  body.quake{animation:quake .45s;}
+  @keyframes quake{
+    0%,100%{transform:translate(0,0);} 15%{transform:translate(-7px,4px);}
+    30%{transform:translate(6px,-5px);} 45%{transform:translate(-5px,-3px);}
+    60%{transform:translate(4px,5px);} 80%{transform:translate(-3px,2px);}
+  }
+  h1,h3,.pix{font-family:var(--display); letter-spacing:.02em;}
+  h1{font-size:30px; margin:2px 0; color:var(--amber); text-align:center;}
+  .sub{font-size:13px; color:var(--muted); text-align:center; margin:2px 0 16px;}
+  .wrap{width:100%; max-width:520px;}
+  .panel{background:var(--panel); border:3px solid var(--edge); border-radius:14px; padding:15px; margin-bottom:12px;}
+  .hide{display:none !important;} .muted{color:var(--muted);}
+  .ballart{display:block; width:92px; height:92px; margin:0 auto 8px; animation:spin 14s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  label{display:block; font-size:11px; color:var(--muted); margin:10px 0 4px; text-transform:uppercase; letter-spacing:.08em;}
+  input[type=text]{width:100%; padding:11px; border-radius:9px; border:2px solid #3b4a7a; background:var(--ink); color:var(--bone); font-family:var(--body); font-size:16px;}
+  input[type=text]:focus{outline:3px solid var(--amber); outline-offset:1px;}
+
+  button{font-family:var(--display); font-size:14px; cursor:pointer; background:var(--moss); color:var(--bone);
+    border:none; border-bottom:4px solid var(--moss-dark); padding:12px 14px; border-radius:9px; margin:6px 4px 0 0;
+    transition:transform .08s;}
+  button:hover{filter:brightness(1.12);}
+  button:active{transform:translateY(2px) scale(.97); border-bottom-width:2px;}
+  button:focus-visible{outline:3px solid var(--amber); outline-offset:2px;}
+  button.primary{background:var(--amber); color:#2a1c05; border-bottom-color:#b9781f;}
+  button.ball{background:var(--coil); border-bottom-color:#5d3f95;}
+  button.ghost{background:var(--edge); border-bottom-color:#212a4a;}
+  button[disabled]{opacity:.4; cursor:not-allowed;}
+  .pickrow{display:flex; flex-wrap:wrap; gap:8px; margin-top:12px;}
+  .pickrow button{flex:1 1 45%; margin:0; text-align:left; font-size:13px;}
+  .pickrow small{display:block; font-family:var(--body); font-size:11px; opacity:.85; margin-top:3px;}
+  .skins{display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;}
+  .skins button{margin:0; font-size:22px; padding:8px 10px; background:var(--ink); border-bottom-color:#0a0f1c;}
+  .skins button.on{background:var(--amber); border-bottom-color:#b9781f;}
+
+  /* ---- world ---- */
+  #stage{position:relative; width:100%; aspect-ratio:1/1; border:4px solid var(--edge); border-radius:10px; overflow:hidden;}
+  #world{display:grid; position:absolute; inset:0;}
+  .tile{position:relative; display:flex; align-items:center; justify-content:center; font-size:min(4vw,19px);}
+  .tile::after{content:""; position:absolute; inset:0; box-shadow:inset 0 0 12px rgba(0,0,0,.22);}
+  .t-T{background:var(--forest);} .t-g{background:var(--moss);} .t-H{background:var(--moss-dark);}
+  .t-f{background:#1f4a24;} .t-p{background:#6d5f47;} .t-w{background:var(--water);}
+  .t-s{background:var(--sand);} .t-b{background:var(--brick);} .t-K{background:#8d7a4e;}
+  .t-w{animation:tide 4s ease-in-out infinite;}
+  @keyframes tide{0%,100%{filter:brightness(1);} 50%{filter:brightness(1.18);}}
+  .t-H,.t-f{transition:filter .2s;}
+  .rustle{animation:rustle .4s;}
+  @keyframes rustle{0%,100%{transform:none;} 25%{transform:translateX(-2px) rotate(-3deg);} 75%{transform:translateX(2px) rotate(3deg);}}
+  #player{position:absolute; left:0; top:0; width:8.3333%; height:8.3333%;
+    display:flex; align-items:center; justify-content:center; font-size:min(5.4vw,25px);
+    transition:transform .13s ease-out; z-index:3; filter:drop-shadow(0 3px 2px rgba(0,0,0,.5));}
+  #player.step{animation:step .16s;}
+  @keyframes step{50%{transform-origin:bottom; scale:1.12 .9;}}
+
+  .hud{display:flex; justify-content:space-between; gap:8px; font-size:12px; margin-bottom:6px; flex-wrap:wrap;}
+  .hud b{font-family:var(--display); color:var(--amber);}
+  .region{font-family:var(--display); font-size:13px; text-align:center; margin-bottom:8px; transition:opacity .3s;}
+  .pad{display:grid; grid-template-columns:repeat(3,1fr); gap:6px; width:190px; margin:12px auto 0;}
+  .pad button{margin:0; width:100%; padding:14px 0; font-size:16px;}
+  .pad .sp{visibility:hidden;}
+
+  /* ---- encounter ---- */
+  #arena{position:relative; min-height:150px; display:flex; align-items:center; justify-content:center;}
+  .sprite{font-size:64px; line-height:1; animation:bob 2.4s ease-in-out infinite; transform-origin:bottom center;}
+  .sprite img{display:block; width:120px; height:120px; object-fit:contain;}
+  @keyframes bob{0%,100%{transform:translateY(0) scale(1);} 50%{transform:translateY(-7px) scale(1.02);}}
+  .sprite.hurt{animation:hurt .38s;}
+  @keyframes hurt{
+    0%{transform:translateX(0);} 20%{transform:translateX(-10px) rotate(-5deg);}
+    40%{transform:translateX(9px) rotate(4deg);} 60%{transform:translateX(-6px);}
+    80%{transform:translateX(4px);} 100%{transform:translateX(0);}
+  }
+  .sprite.hurt{filter:brightness(2.2) sepia(1) hue-rotate(-40deg) saturate(4);}
+  .sprite.gone{opacity:0; transform:scale(.3); transition:all .3s;}
+  .dmg{position:absolute; left:50%; top:10px; font-family:var(--display); font-size:22px; color:#ff6b5a;
+    animation:float 1s forwards; pointer-events:none;}
+  @keyframes float{0%{opacity:1; transform:translate(-50%,0);} 100%{opacity:0; transform:translate(-50%,-46px);}}
+
+  #flyball{position:absolute; width:40px; height:40px; left:50%; bottom:0; margin-left:-20px; z-index:5; display:none;}
+  #flyball.fly{display:block; animation:arc .55s cubic-bezier(.3,-0.4,.7,1) forwards;}
+  @keyframes arc{0%{bottom:0; transform:scale(.6) rotate(0);} 100%{bottom:56%; transform:scale(1) rotate(720deg);}}
+  #flyball.wobble{display:block; bottom:40%; animation:wob .5s ease-in-out;}
+  @keyframes wob{0%,100%{transform:rotate(0);} 25%{transform:rotate(-22deg);} 75%{transform:rotate(22deg);}}
+  #flyball.pop{display:block; bottom:40%; animation:pop .45s forwards;}
+  @keyframes pop{to{transform:scale(2.4); opacity:0;}}
+  .ring{position:absolute; left:50%; top:45%; width:20px; height:20px; margin:-10px 0 0 -10px;
+    border:4px solid var(--amber); border-radius:50%; animation:ring .7s forwards; pointer-events:none;}
+  @keyframes ring{to{width:230px; height:230px; margin:-115px 0 0 -115px; opacity:0;}}
+
+  .name{font-family:var(--display); font-size:19px; color:var(--amber); margin-top:6px; text-align:center;}
+  .tag{font-size:12px; color:var(--muted); text-align:center;}
+  .bar{height:14px; background:var(--ink); border:2px solid #3b4a7a; border-radius:8px; overflow:hidden; margin:10px 0 3px;}
+  .bar span{display:block; height:100%; background:linear-gradient(90deg,#e2503f,var(--amber)); transition:width .45s cubic-bezier(.2,.8,.3,1);}
+  .wall{font-size:12px; color:var(--sand); margin-top:4px;}
+  .log{background:var(--ink); border-radius:9px; padding:10px 12px; font-size:14px; min-height:74px; max-height:140px; overflow-y:auto; margin-top:10px; line-height:1.45;}
+  .log p{margin:0 0 6px; animation:slidein .25s;} .log p:last-child{margin:0;}
+  @keyframes slidein{from{opacity:0; transform:translateX(-8px);} to{opacity:1; transform:none;}}
+  .log .hit{color:var(--amber);}
+
+  .cards{display:grid; grid-template-columns:repeat(auto-fill,minmax(92px,1fr)); gap:8px;}
+  .card{background:var(--ink); border:2px solid #3b4a7a; border-radius:10px; padding:8px; text-align:center;}
+  .card.locked{opacity:.4; border-style:dashed;}
+  .card .s{font-size:26px;} .card .s img{width:44px; height:44px; object-fit:contain; display:block; margin:0 auto;}
+  .card .n{font-family:var(--display); font-size:11px; margin-top:4px;}
+  .card .r{font-size:10px; color:var(--muted);}
+
+  .shelf{display:flex; align-items:center; gap:10px; background:var(--ink); border-radius:10px; padding:10px; margin-bottom:8px;}
+  .shelf .ic{font-size:26px;} .shelf .txt{flex:1; font-size:13px;}
+  .shelf .txt b{display:block; font-family:var(--display); font-size:13px; color:var(--amber);}
+  .shelf button{margin:0; font-size:12px; padding:9px 11px;}
+  .price{color:var(--coin); font-family:var(--display); font-size:12px;}
+
+  .studio{display:flex; align-items:center; gap:10px; background:var(--ink); border-radius:10px; padding:9px; margin-bottom:8px;}
+  .studio .prev{width:52px; height:52px; display:flex; align-items:center; justify-content:center; font-size:26px;
+    background:#0a0f1c; border-radius:8px; flex-shrink:0;}
+  .studio .prev img{width:48px; height:48px; object-fit:contain;}
+  .studio .who{flex:1; font-family:var(--display); font-size:12px;}
+  .studio label.up{display:inline-block; margin:0; padding:9px 11px; border-radius:9px; background:var(--moss);
+    border-bottom:4px solid var(--moss-dark); font-family:var(--display); font-size:12px; color:var(--bone);
+    cursor:pointer; text-transform:none; letter-spacing:0;}
+  .studio input[type=file]{display:none;}
+  .big{font-family:var(--display); font-size:22px; color:var(--amber); text-align:center; margin:8px 0;}
+  .foot{font-size:11px; color:#77879e; text-align:center; margin:4px 0 24px; max-width:520px; line-height:1.5;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- TITLE -->
+<section id="s-title">
+  <svg class="ballart" viewBox="0 0 100 100" aria-label="Octeo ball">
+    <circle cx="50" cy="50" r="46" fill="#2f6bb5" stroke="#141b2e" stroke-width="5"/>
+    <path d="M4 52 A46 46 0 0 0 96 52 L96 55 A46 46 0 0 1 4 55 Z" fill="#141b2e"/>
+    <path d="M6 55 A46 46 0 0 0 94 55 Z" fill="#e3b775"/>
+    <circle cx="74" cy="24" r="9" fill="#f2d24b"/>
+    <ellipse cx="32" cy="38" rx="11" ry="6" fill="#8b5fd6"/>
+    <path d="M44 40 q6 -14 12 0 z" fill="#e3b775"/>
+    <rect x="44" y="70" width="14" height="14" rx="2" fill="#3f7d3a"/>
+  </svg>
+  <h1>OCTOMON</h1>
+  <p class="sub">Four regions. Eight Octomon. One Octeo ball at a time.</p>
+  <div class="panel">
+    <h3 style="margin:0; font-size:15px;">Who is playing?</h3>
+    <p style="font-size:13px; margin:5px 0 0;" class="muted">Add your family. Everyone gets a different perk.</p>
+    <label for="n1">Player 1</label><input type="text" id="n1" value="Asher">
+    <label for="n2">Player 2</label><input type="text" id="n2" value="Dad">
+    <label for="n3">Player 3 (optional)</label><input type="text" id="n3">
+    <label for="n4">Player 4 (optional)</label><input type="text" id="n4">
+    <button class="primary" onclick="makeRoster()">Save names</button>
+    <div id="pick" class="pickrow"></div>
+    <button class="ghost" style="width:100%;margin-top:14px;" onclick="show('s-art')">🎨 Art Studio — add your drawings</button>
+  </div>
+</section>
+
+<!-- ART STUDIO -->
+<section id="s-art" class="hide">
+  <div class="panel">
+    <h3 style="margin:0 0 4px; font-size:15px;">🎨 Art Studio</h3>
+    <p class="muted" style="font-size:13px;margin:0 0 12px;">
+      Take a photo of each drawing on white paper. The white gets cut away automatically
+      and the drawing becomes the real sprite in the game.</p>
+    <div id="studio"></div>
+    <button class="ghost" style="width:100%;margin-top:6px;" onclick="show('s-title')">Done</button>
+  </div>
+</section>
+
+<!-- SKIN -->
+<section id="s-skin" class="hide">
+  <div class="panel">
+    <h3 style="margin:0 0 4px; font-size:15px;">Pick your skin, <span id="skinWho" style="color:var(--amber)"></span></h3>
+    <p class="muted" style="font-size:13px;margin:0;">This is how you look in the world.</p>
+    <div class="skins" id="skinRow"></div>
+    <button class="primary" style="width:100%;margin-top:14px;" onclick="enterWorld()">Start exploring</button>
+  </div>
+</section>
+
+<!-- WORLD -->
+<section id="s-world" class="hide">
+  <div class="hud">
+    <span><b id="hName">—</b> <span class="muted" id="hPerk"></span></span>
+    <span>🟣<b id="hBalls">10</b> 🟨<b id="hSand">0</b> 💰<b id="hCoins">0.00</b> 📕<b id="hCaught">0</b>/8</span>
+  </div>
+  <div class="region" id="hRegion">—</div>
+  <div id="stage"><div id="world"></div><div id="player">🧍</div></div>
+  <div class="pad">
+    <span class="sp"></span><button onclick="move(0,-1)">↑</button><span class="sp"></span>
+    <button onclick="move(-1,0)">←</button><button onclick="move(0,1)">↓</button><button onclick="move(1,0)">→</button>
+  </div>
+  <p class="sub" style="margin:10px 0 0;">🏪 in the middle is the shop. Each region hides different Octomon.</p>
+  <div style="text-align:center;">
+    <button class="ghost" onclick="show('s-log')">Octo Log</button>
+    <button class="ghost hide" id="bCar" onclick="show('s-travel')">🏎️ Hypercar</button>
+    <button class="ghost" onclick="show('s-title')">Switch player</button>
+  </div>
+</section>
+
+<!-- TRAVEL -->
+<section id="s-travel" class="hide">
+  <div class="panel">
+    <h3 style="margin:0 0 4px; font-size:15px;">🏎️ Hypercar</h3>
+    <p class="muted" style="font-size:13px;margin:0 0 10px;">Drive straight to any region.</p>
+    <div id="travelRow"></div>
+    <button class="ghost" style="width:100%;margin-top:8px;" onclick="show('s-world')">Back</button>
+  </div>
+</section>
+
+<!-- SHOP -->
+<section id="s-shop" class="hide">
+  <div class="panel">
+    <h3 style="margin:0 0 4px; font-size:15px;">🏪 The Shop</h3>
+    <p class="muted" style="font-size:13px;margin:0 0 12px;">You have <span class="price" id="shopCoins">$0.00</span></p>
+    <div id="shelves"></div>
+    <div class="log" id="shopLog" style="min-height:40px;"></div>
+    <button class="primary" style="width:100%;margin-top:10px;" onclick="show('s-world')">Leave the shop</button>
+  </div>
+</section>
+
+<!-- ENCOUNTER -->
+<section id="s-fight" class="hide">
+  <div class="panel">
+    <div id="arena">
+      <div class="sprite" id="fSprite">🦎</div>
+      <svg id="flyball" viewBox="0 0 100 100" aria-hidden="true">
+        <circle cx="50" cy="50" r="46" fill="#2f6bb5" stroke="#141b2e" stroke-width="6"/>
+        <path d="M6 55 A46 46 0 0 0 94 55 Z" fill="#e3b775"/>
+        <circle cx="74" cy="24" r="9" fill="#f2d24b"/>
+      </svg>
+    </div>
+    <div class="name" id="fName">—</div>
+    <div class="tag" id="fTag">—</div>
+    <div class="bar"><span id="fBar" style="width:100%"></span></div>
+    <div style="display:flex;justify-content:space-between;font-size:12px;" class="muted">
+      <span id="fHp">HP 20/20</span><span id="fOdds">Catch 15%</span>
+    </div>
+    <div class="wall" id="fWall"></div>
+    <div class="log" id="log"></div>
+    <div style="display:flex;flex-wrap:wrap;">
+      <button onclick="weaken()" id="bWeak">Weaken</button>
+      <button class="ball" onclick="throwBall()" id="bBall">Throw Octeo ball</button>
+      <button class="ghost" id="bRun" onclick="flee()">Run</button>
+    </div>
+  </div>
+</section>
+
+<!-- LOG -->
+<section id="s-log" class="hide">
+  <div class="panel">
+    <h3 style="margin:0 0 10px; font-size:15px;">Octo Log — <span id="logWho" style="color:var(--amber)"></span></h3>
+    <div id="cards" class="cards"></div>
+    <p class="sub" style="margin:12px 0 0;">Grey slots are Octomon still to be designed.</p>
+    <button class="primary" style="width:100%;margin-top:10px;" onclick="show('s-world')">Back to the world</button>
+  </div>
+</section>
+
+<!-- WIN -->
+<section id="s-win" class="hide">
+  <div class="panel" style="text-align:center;">
+    <div class="big">OCTO CHAMPION</div>
+    <p id="winWho" class="muted" style="font-size:14px;"></p>
+    <p style="font-size:14px;">Every Octomon in the log. All four regions cleared.</p>
+    <button class="primary" onclick="show('s-log')">See my Octo Log</button>
+  </div>
+</section>
+
+</div>
+<p class="foot">Designed by Asher.</p>
+
+<script>
+/* ============ DATA ============ */
+const REGIONS = {
+  f:{name:"THE DEEP FOREST", at:[2,2]}, H:{name:"THE GRASSLANDS", at:[9,2]},
+  g:{name:"THE GRASSLANDS", at:[9,2]}, s:{name:"THE BEACH", at:[3,9]},
+  w:{name:"THE BEACH", at:[3,9]},      b:{name:"THE BLOCKY LANDS", at:[8,9]},
+  p:{name:"THE CROSSROADS", at:[6,4]}, K:{name:"THE CROSSROADS", at:[6,4]}
+};
+const TRAVEL = [
+  {key:"f", label:"🌳 The Deep Forest"}, {key:"H", label:"🌿 The Grasslands"},
+  {key:"s", label:"🏖️ The Beach"},       {key:"b", label:"🧱 The Blocky Lands"}
+];
+const DEX = [
+  {id:"grasslet", name:"Grasslet", sprite:"🐛", biome:"Grasslands", tiles:["H"], rarity:"2/10", weight:38, hp:16, base:.34, pay:2, placeholder:true},
+  {id:"ripplet",  name:"Ripplet",  sprite:"🐸", biome:"Beach", tiles:["s"], rarity:"4/10", weight:24, hp:22, base:.28, pay:3, placeholder:true},
+  {id:"pirate",   name:"St. Pirate", sprite:"🏴‍☠️", biome:"Fighting + Water", tiles:["s"], rarity:"5/10", weight:20, hp:26, base:.24, pay:5, move:"hook"},
+  {id:"taco",     name:"Tacoman",  sprite:"🌮", biome:"2 biomes", tiles:["H","s"], rarity:"10/10", weight:7, hp:30, base:.16, pay:9, move:"taco"},
+  {id:"crab",     name:"Mr. Crab Pants", sprite:"🦀", biome:"Beach + Builder", tiles:["s"], rarity:"10/10", weight:6, hp:32, base:.15, pay:10, move:"wall"},
+  {id:"mech",     name:"Mech",     sprite:"🤖", biome:"Blocky", tiles:["b"], rarity:"10/10", weight:22, hp:34, base:.14, pay:10, move:"blast"},
+  {id:"flyer",    name:"Mr. Flyer", sprite:"🦅", biome:"Unknown — anywhere", tiles:["H","s","b","f","g"], rarity:"12/10", weight:2, hp:34, base:.10, pay:14, move:"bomb"},
+  {id:"rage",     name:"Rage Monster", sprite:"🤼", biome:"Forest", tiles:["f"], rarity:"RAREST", weight:4, hp:40, base:.08, pay:20, move:"wrestle", lastOne:true}
+];
+const SLOTS = 8;
+const PERKS = [
+  {label:"Quick hands", note:"better catch odds", bonus:.10, balls:10},
+  {label:"Deep pockets", note:"starts with 15 balls", bonus:0, balls:15},
+  {label:"Sharp eyes", note:"finds rare Octomon more often", bonus:.03, balls:10, luck:true},
+  {label:"Strong arm", note:"weakens Octomon faster", bonus:0, balls:10, strong:true}
+];
+const SKINS = ["🧍","🤠","🥷","🧙","🦸","🧑‍🚀","🧑‍🌾","🧝","🧑‍🎤","🕵️"];
+const SHOP = [
+  {id:"ball", icon:"🟣", name:"Octeo ball", desc:"One more chance at a catch.", cost:2.00},
+  {id:"sand", icon:"🟨", name:"Sandstone", desc:"Toward Mr. Crab Pants' evolution.", cost:5.00},
+  {id:"car",  icon:"🏎️", name:"Hypercar", desc:"Drive straight to any region. Buy once.", cost:25.60}
+];
+
+let players = [], me = null, foe = null, turns = 0, skipThrow = false, art = {}, busy = false;
+const sleep = ms => new Promise(r=>setTimeout(r, ms));
+
+/* ============ SAVE ============ */
+function save(){ try{ localStorage.setItem("octomon3", JSON.stringify(players)); }catch(e){} }
+function saveArt(){ try{ localStorage.setItem("octomonArt", JSON.stringify(art)); }catch(e){ alert("That picture was too big to save. Try a smaller photo."); } }
+function load(){
+  try{ const r = localStorage.getItem("octomon3"); if(r) players = JSON.parse(r)||[]; }catch(e){ players=[]; }
+  try{ const a = localStorage.getItem("octomonArt"); if(a) art = JSON.parse(a)||{}; }catch(e){ art={}; }
+  players.forEach(p=>{
+    p.coins = p.coins||0; p.sand = p.sand||0; p.caught = p.caught||[];
+    p.skin = p.skin||SKINS[0]; p.car = !!p.car; p.evolved = !!p.evolved;
+  });
+}
+
+/* ============ ART STUDIO ============ */
+function pic(id, fallback){
+  return art[id] ? `<img src="${art[id]}" alt="">` : fallback;
+}
+function drawStudio(){
+  const box = document.getElementById("studio"); box.innerHTML = "";
+  DEX.forEach(d=>{
+    const row = document.createElement("div"); row.className = "studio";
+    row.innerHTML = `<div class="prev">${pic(d.id, d.sprite)}</div><div class="who">${d.name}</div>`;
+    const lab = document.createElement("label"); lab.className = "up";
+    lab.textContent = art[d.id] ? "Change" : "Add photo";
+    const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*";
+    inp.onchange = e => loadDrawing(d.id, e.target.files[0]);
+    lab.appendChild(inp); row.appendChild(lab); box.appendChild(row);
+  });
+}
+function loadDrawing(id, file){
+  if(!file) return;
+  const rd = new FileReader();
+  rd.onload = ev => {
+    const img = new Image();
+    img.onload = () => { art[id] = cutout(img); saveArt(); drawStudio(); };
+    img.src = ev.target.result;
+  };
+  rd.readAsDataURL(file);
+}
+/* photograph on white paper -> transparent sprite, trimmed to the drawing */
+function cutout(img){
+  const MAX = 240;
+  const sc = Math.min(MAX/img.width, MAX/img.height, 1);
+  const w = Math.round(img.width*sc), h = Math.round(img.height*sc);
+  const c = document.createElement("canvas"); c.width=w; c.height=h;
+  const x = c.getContext("2d"); x.drawImage(img,0,0,w,h);
+  const d = x.getImageData(0,0,w,h), p = d.data;
+  let minX=w, minY=h, maxX=0, maxY=0, found=false;
+  for(let i=0;i<p.length;i+=4){
+    const lum = (p[i]*.299 + p[i+1]*.587 + p[i+2]*.114);
+    if(lum > 205){ p[i+3] = 0; }
+    else{
+      const n = i/4, px = n%w, py = (n/w)|0;
+      if(px<minX)minX=px; if(px>maxX)maxX=px;
+      if(py<minY)minY=py; if(py>maxY)maxY=py;
+      found = true;
+    }
+  }
+  x.putImageData(d,0,0);
+  if(!found) return c.toDataURL("image/png");
+  const pad = 4;
+  minX=Math.max(0,minX-pad); minY=Math.max(0,minY-pad);
+  maxX=Math.min(w-1,maxX+pad); maxY=Math.min(h-1,maxY+pad);
+  const tw = maxX-minX+1, th = maxY-minY+1;
+  const t = document.createElement("canvas"); t.width=tw; t.height=th;
+  t.getContext("2d").drawImage(c, minX,minY,tw,th, 0,0,tw,th);
+  return t.toDataURL("image/png");
+}
+
+/* ============ ROSTER ============ */
+function makeRoster(){
+  const names = ["n1","n2","n3","n4"].map(i=>document.getElementById(i).value.trim()).filter(Boolean);
+  players = names.map((n,i)=> players.find(p=>p.name===n) ||
+    {name:n, perkIndex:i%PERKS.length, balls:PERKS[i%PERKS.length].balls, sand:0, coins:0, caught:[], evolved:false, skin:SKINS[i%SKINS.length], car:false});
+  save(); drawPick();
+}
+function drawPick(){
+  const box = document.getElementById("pick"); box.innerHTML = "";
+  if(!players.length){ box.innerHTML = '<p class="sub" style="width:100%">Type at least one name first.</p>'; return; }
+  players.forEach((p,i)=>{
+    const k = PERKS[p.perkIndex];
+    const b = document.createElement("button");
+    b.innerHTML = p.skin + " " + p.name + "<small>" + k.label + " — " + k.note + "</small>";
+    b.onclick = ()=>chooseSkin(i);
+    box.appendChild(b);
+  });
+}
+function chooseSkin(i){
+  me = players[i];
+  document.getElementById("skinWho").textContent = me.name;
+  const row = document.getElementById("skinRow"); row.innerHTML = "";
+  SKINS.forEach(sk=>{
+    const b = document.createElement("button");
+    b.textContent = sk; if(sk===me.skin) b.className = "on";
+    b.onclick = ()=>{ me.skin = sk; save(); chooseSkin(i); };
+    row.appendChild(b);
+  });
+  show("s-skin");
+}
+function enterWorld(){
+  document.getElementById("hName").textContent = me.name;
+  document.getElementById("hPerk").textContent = "— " + PERKS[me.perkIndex].label;
+  buildGrid(); placePlayer(); hud(); show("s-world");
+}
+function perk(){ return PERKS[me.perkIndex]; }
+
+/* ============ WORLD ============ */
+const MAP = [
+  "TTTTTTTTTTTT","TfffgppgHHgT","TfffgppgHHgT","TfffgppggggT",
+  "TggggppggggT","TpppppKppppT","TwwssppgHHgT","TwwssppgHHgT",
+  "TwwssppggggT","TssssppgbbgT","TggggppggggT","TTTTTTTTTTTT"
+].map(r=>r.split(""));
+const DECOR = {T:"🌲", f:"🌳", H:"🌿", b:"🧱", K:"🏪", w:"", s:"", g:"", p:""};
+const BLOCK = new Set(["T","w"]);
+const RATE  = {H:.34, f:.30, s:.30, b:.32, g:.05, p:0, K:0, T:0, w:0};
+let px = 6, py = 4;
+
+function buildGrid(){
+  const el = document.getElementById("world");
+  el.style.gridTemplateColumns = `repeat(${MAP[0].length},1fr)`;
+  el.innerHTML = "";
+  MAP.forEach((row,y)=>row.forEach((c,x)=>{
+    const d = document.createElement("div");
+    d.className = "tile t-" + c; d.textContent = DECOR[c];
+    d.dataset.xy = x + "," + y;
+    el.appendChild(d);
+  }));
+}
+function placePlayer(){
+  const pl = document.getElementById("player");
+  pl.textContent = me.skin;
+  pl.style.transform = `translate(${px*100}%, ${py*100}%)`;
+  const r = REGIONS[MAP[py][px]];
+  document.getElementById("hRegion").textContent = r ? r.name : "";
+  document.getElementById("bCar").classList.toggle("hide", !me.car);
+}
+function move(dx,dy){
+  if(busy || document.getElementById("s-world").classList.contains("hide")) return;
+  const nx=px+dx, ny=py+dy;
+  if(ny<0||ny>=MAP.length||nx<0||nx>=MAP[0].length) return;
+  const t = MAP[ny][nx];
+  if(BLOCK.has(t)) return;
+  px=nx; py=ny; placePlayer();
+  const pl = document.getElementById("player");
+  pl.classList.remove("step"); void pl.offsetWidth; pl.classList.add("step");
+  if(t==="K") return setTimeout(openShop, 160);
+  if(Math.random() < (RATE[t]||0)){
+    const tile = document.querySelector(`[data-xy="${nx},${ny}"]`);
+    if(tile){ tile.classList.remove("rustle"); void tile.offsetWidth; tile.classList.add("rustle"); }
+    setTimeout(()=>encounter(t), 320);
+  }
+}
+document.addEventListener("keydown", e=>{
+  const m={arrowup:[0,-1],w:[0,-1],arrowdown:[0,1],s:[0,1],arrowleft:[-1,0],a:[-1,0],arrowright:[1,0],d:[1,0]};
+  const k=e.key.toLowerCase(); if(m[k]){ e.preventDefault(); move(m[k][0],m[k][1]); }
+});
+
+/* ============ SHOP + TRAVEL ============ */
+function money(n){ return "$" + n.toFixed(2); }
+function openShop(){ document.getElementById("shopLog").innerHTML=""; drawShop(); show("s-shop"); }
+function drawShop(){
+  document.getElementById("shopCoins").textContent = money(me.coins);
+  const box = document.getElementById("shelves"); box.innerHTML = "";
+  SHOP.forEach(it=>{
+    const owned = it.id==="car" && me.car;
+    const d = document.createElement("div"); d.className="shelf";
+    d.innerHTML = `<div class="ic">${it.icon}</div><div class="txt"><b>${it.name}</b>${it.desc}<br><span class="price">${money(it.cost)}</span></div>`;
+    const b = document.createElement("button");
+    b.className="primary"; b.textContent = owned ? "OWNED" : "Buy";
+    b.disabled = owned || me.coins < it.cost;
+    b.onclick = ()=>buy(it);
+    d.appendChild(b); box.appendChild(d);
+  });
+}
+function buy(it){
+  if(me.coins < it.cost) return;
+  me.coins -= it.cost;
+  if(it.id==="ball") me.balls++;
+  if(it.id==="sand"){ me.sand++; checkEvolve(); }
+  if(it.id==="car") me.car = true;
+  const p = document.createElement("p"); p.className="hit";
+  p.textContent = it.id==="car" ? "The Hypercar is yours! Drive to any region from the world screen." : "Bought a " + it.name + ".";
+  document.getElementById("shopLog").appendChild(p);
+  save(); drawShop(); hud();
+}
+function drawTravel(){
+  const box = document.getElementById("travelRow"); box.innerHTML = "";
+  TRAVEL.forEach(t=>{
+    const b = document.createElement("button");
+    b.style.width="100%"; b.style.marginBottom="6px"; b.textContent = t.label;
+    b.onclick = ()=>{ const a = REGIONS[t.key].at; px=a[0]; py=a[1]; placePlayer(); show("s-world"); };
+    box.appendChild(b);
+  });
+}
+
+/* ============ ENCOUNTER ============ */
+function haveAllButRage(){ return DEX.filter(d=>!d.lastOne).every(d=>me.caught.some(c=>c.id===d.id)); }
+function roll(tile){
+  let pool = DEX.filter(d=>d.tiles.includes(tile));
+  if(!haveAllButRage()) pool = pool.filter(d=>!d.lastOne);
+  if(!pool.length) return null;
+  const lucky = perk().luck; let total = 0;
+  const w = pool.map(d=>{ const v = lucky ? d.weight+4 : d.weight; total += v; return v; });
+  let r = Math.random()*total;
+  for(let i=0;i<pool.length;i++){ r -= w[i]; if(r<=0) return pool[i]; }
+  return pool[0];
+}
+function encounter(tile){
+  const sp = roll(tile); if(!sp) return;
+  foe = {...sp, maxHp:sp.hp, hp:sp.hp, usedMove:false, wall:false, rebuilt:false};
+  turns = 0; skipThrow = false; busy = false;
+  const el = document.getElementById("fSprite");
+  el.className = "sprite"; el.innerHTML = pic(foe.id, foe.sprite);
+  document.getElementById("fName").textContent = "Wild " + foe.name;
+  document.getElementById("fTag").textContent = foe.biome + " · " + foe.rarity;
+  document.getElementById("log").innerHTML = "";
+  say("A wild " + foe.name + " appears!", true);
+  if(foe.move==="wall"){ foe.wall = true; say("Mr. Crab Pants builds a SAND WALL!"); }
+  refresh(); show("s-fight");
+}
+function odds(){ return Math.min(.95, foe.base + (1 - foe.hp/foe.maxHp)*.55 + perk().bonus); }
+function refresh(){
+  document.getElementById("fBar").style.width = (foe.hp/foe.maxHp*100)+"%";
+  document.getElementById("fHp").textContent = "HP " + foe.hp + "/" + foe.maxHp;
+  document.getElementById("fOdds").textContent = "Catch " + Math.round(odds()*100) + "%";
+  document.getElementById("fWall").textContent = foe.wall ? "🧱 Sand Wall is up — balls bounce off!" : "";
+  lock(busy);
+  hud();
+}
+function lock(on){
+  ["bWeak","bBall","bRun"].forEach(id=>document.getElementById(id).disabled = on);
+  if(!on) document.getElementById("bBall").disabled = me.balls<=0 || skipThrow;
+}
+function say(t, big){
+  const l = document.getElementById("log"); const p = document.createElement("p");
+  p.textContent = t; if(big) p.className = "hit";
+  l.appendChild(p); l.scrollTop = l.scrollHeight;
+}
+function hud(){
+  document.getElementById("hBalls").textContent = me.balls;
+  document.getElementById("hSand").textContent = me.sand;
+  document.getElementById("hCoins").textContent = me.coins.toFixed(2);
+  document.getElementById("hCaught").textContent = me.caught.length;
+  save();
+}
+function quake(){ document.body.classList.remove("quake"); void document.body.offsetWidth; document.body.classList.add("quake"); }
+function hurtFX(n){
+  const el = document.getElementById("fSprite");
+  el.classList.remove("hurt"); void el.offsetWidth; el.classList.add("hurt");
+  const d = document.createElement("div"); d.className = "dmg"; d.textContent = "-" + n;
+  document.getElementById("arena").appendChild(d);
+  setTimeout(()=>d.remove(), 1000);
+}
+
+async function weaken(){
+  if(busy) return; busy = true; lock(true);
+  if(foe.wall){
+    foe.wall = false; say("You smash the sand wall down!"); quake();
+    if(foe.move==="wall" && !foe.rebuilt && Math.random()<.5){ foe.rebuilt=true; foe.wall=true; say("He rebuilds it! Only once though."); }
+    refresh(); await sleep(350); return foeTurn();
+  }
+  const hit = (perk().strong ? 6 : 4) + Math.floor(Math.random()*4);
+  foe.hp = Math.max(1, foe.hp - hit);
+  hurtFX(hit);
+  say("You weaken the " + foe.name + " by " + hit + ".");
+  refresh(); await sleep(450); foeTurn();
+}
+
+async function throwBall(){
+  if(busy) return;
+  if(skipThrow){ say("You're pinned — you can only weaken."); return; }
+  if(me.balls<=0){ say("No Octeo balls left! Buy more at the shop."); return; }
+  busy = true; lock(true);
+  if(foe.wall){
+    me.balls--; say("The ball bounces off the sand wall. Wasted.");
+    refresh(); await sleep(400); return foeTurn();
+  }
+  me.balls--;
+  const fb = document.getElementById("flyball");
+  const sp = document.getElementById("fSprite");
+  fb.className = "fly"; say("You throw an Octeo ball...");
+  await sleep(560);
+  if(foe.move==="hook" && !foe.usedMove && Math.random()<.5){
+    foe.usedMove = true; fb.className = "pop"; quake();
+    say("HOOK WHIRL! St. Pirate catches the ball on his hook and flings it away.", true);
+    await sleep(480); fb.className = ""; refresh(); return foeTurn();
+  }
+  sp.classList.add("gone");
+  const caught = Math.random() < odds();
+  for(let i=0;i<3;i++){
+    fb.className = ""; void fb.offsetWidth; fb.className = "wobble";
+    await sleep(520);
+  }
+  if(caught){
+    fb.className = ""; sp.classList.remove("gone");
+    const r = document.createElement("div"); r.className = "ring";
+    document.getElementById("arena").appendChild(r);
+    setTimeout(()=>r.remove(), 750);
+    return capture();
+  }
+  fb.className = "pop"; sp.classList.remove("gone"); quake();
+  say("The " + foe.name + " breaks free!");
+  await sleep(450); fb.className = "";
+  refresh(); foeTurn();
+}
+
+function checkEvolve(){
+  if(!me.evolved && me.sand>=8 && me.caught.some(c=>c.id==="crab")){
+    me.sand -= 8; me.evolved = true;
+    const crab = me.caught.find(c=>c.id==="crab");
+    crab.name = "King Crab Pants"; crab.sprite = "👑";
+    return true;
+  }
+  return false;
+}
+async function capture(){
+  me.caught.push({id:foe.id, name:foe.name, sprite:foe.sprite, rarity:foe.rarity});
+  say("Caught! " + foe.name + " joins " + me.name + "'s Octo Log.", true);
+  me.coins += foe.pay; say("You earn " + money(foe.pay) + ".");
+  if(Math.random()<.5){ me.sand++; say("It dropped a Sandstone! (" + me.sand + "/8)"); }
+  if(checkEvolve()) say("8 Sandstone used — MR. CRAB PANTS EVOLVED into KING CRAB PANTS!", true);
+  hud();
+  const done = DEX.every(d=>me.caught.some(c=>c.id===d.id));
+  await sleep(1300); busy = false;
+  if(done){ document.getElementById("winWho").textContent = me.name + " caught them all."; show("s-win"); }
+  else show("s-world");
+}
+
+async function foeTurn(){
+  turns++; skipThrow = false;
+  if(foe.move==="taco" && !foe.usedMove && foe.hp < foe.maxHp*.5){
+    foe.usedMove = true; foe.hp = foe.maxHp;
+    say("TACO RAIN! Tacos fall from the sky and heal Tacoman all the way up.", true);
+    busy = false; return refresh();
+  }
+  if(foe.move==="bomb" && !foe.usedMove && turns>=2){
+    foe.usedMove = true; quake();
+    const lost = Math.min(2, me.balls); me.balls -= lost;
+    say("BOMB ATTACK! Mr. Flyer drops a bomb and destroys " + lost + " of your Octeo balls.", true);
+    busy = false; return refresh();
+  }
+  if(foe.move==="blast" && !foe.usedMove && turns>=3){
+    foe.usedMove = true; quake();
+    say("MECH BLAST! A huge blast knocks you back to the crossroads.", true);
+    px = 6; py = 4;
+    await sleep(1300); busy = false; placePlayer(); return show("s-world");
+  }
+  if(foe.move==="wrestle"){
+    const m = Math.floor(Math.random()*3); quake();
+    if(m===0) say("BODY SLAM! You're flattened and lose your turn.", true);
+    if(m===1){ const l=Math.min(1,me.balls); me.balls-=l; say("SUPLEX! He throws your Octeo ball back and it's gone.", true); }
+    if(m===2){ skipThrow = true; say("PIN! You can't throw next turn — only weaken.", true); }
+    busy = false; return refresh();
+  }
+  if(turns>=9 || (foe.rarity==="RAREST" && turns>=6 && Math.random()<.35)){
+    say("The " + foe.name + " escapes into the wild.");
+    document.getElementById("fSprite").classList.add("gone");
+    await sleep(800); busy = false; return show("s-world");
+  }
+  busy = false; refresh();
+}
+async function flee(){
+  if(busy) return; busy = true;
+  say("You back away slowly.");
+  await sleep(420); busy = false; show("s-world");
+}
+
+/* ============ LOG + SHELL ============ */
+function drawLog(){
+  document.getElementById("logWho").textContent = me.name;
+  const box = document.getElementById("cards"); box.innerHTML = "";
+  me.caught.forEach(c=>{
+    const d = document.createElement("div"); d.className = "card";
+    d.innerHTML = '<div class="s">' + pic(c.id, c.sprite) + '</div><div class="n">' + c.name + '</div><div class="r">' + c.rarity + '</div>';
+    box.appendChild(d);
+  });
+  for(let i=me.caught.length;i<SLOTS;i++){
+    const d = document.createElement("div"); d.className = "card locked";
+    d.innerHTML = '<div class="s">❓</div><div class="n">???</div><div class="r">not caught</div>';
+    box.appendChild(d);
+  }
+}
+function show(id){
+  ["s-title","s-art","s-skin","s-world","s-fight","s-log","s-shop","s-travel","s-win"].forEach(s=>
+    document.getElementById(s).classList.toggle("hide", s!==id));
+  if(id==="s-log") drawLog();
+  if(id==="s-title") drawPick();
+  if(id==="s-art") drawStudio();
+  if(id==="s-travel") drawTravel();
+  if(id==="s-world" && me) placePlayer();
+}
+
+load();
+if(players.length) ["n1","n2","n3","n4"].forEach((id,i)=>{ document.getElementById(id).value = players[i] ? players[i].name : ""; });
+drawPick();
+</script>
+</body>
+</html>
