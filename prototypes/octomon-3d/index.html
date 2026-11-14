@@ -1,0 +1,620 @@
+<!doctype html>
+<!-- PROTOTYPE - NOT FOR PRODUCTION -->
+<!-- Question: Does a 3D walkable world feel better on a phone than the 2D grid? -->
+<!-- Date: 2026-11-14 -->
+<!-- Scope (Build order step 1 only): one region (the Grasslands + crossroads), third-person
+     camera, phone touch controls, tall grass that rustles and an Octomon that appears.
+     No catching, no inventory, no shop, no second region. The 2D game is prototypes/octomon/. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>OCTOMON 3D</title>
+<style>
+  :root{
+    --night:#141b2e; --panel:#1c2540; --edge:#33406b; --ink:#101728;
+    --moss:#3f7d3a; --moss-dark:#2b5a29; --amber:#f2a63b; --bone:#f4efe2; --muted:#9fb0c9;
+    --display: ui-monospace, 'Courier New', monospace;
+    --body: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  }
+  html, body { margin:0; height:100%; background:#8fd0ff; overflow:hidden; color:var(--bone);
+    font-family:var(--body); -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+  canvas#game { display:block; position:fixed; inset:0; width:100vw; height:100vh; touch-action:none; }
+  *, *::before, *::after { box-sizing:border-box; }
+  .hide { display:none !important; }
+
+  /* region name */
+  #region { position:fixed; top:calc(10px + env(safe-area-inset-top,0px)); left:0; right:0; text-align:center;
+    font-family:var(--display); font-weight:700; font-size:15px; letter-spacing:.08em; color:#fff;
+    text-shadow:0 2px 0 rgba(0,0,0,.45); pointer-events:none; }
+  #toast { position:fixed; top:calc(38px + env(safe-area-inset-top,0px)); left:50%; transform:translateX(-50%);
+    background:rgba(16,23,40,.82); border:3px solid var(--edge); border-radius:12px; padding:8px 14px;
+    font-size:15px; white-space:nowrap; pointer-events:none; }
+  #toast b { color:var(--amber); }
+
+  /* joystick: appears where the left thumb lands */
+  #stick { position:fixed; width:120px; height:120px; margin:-60px 0 0 -60px; border-radius:50%;
+    background:rgba(16,23,40,.28); border:3px solid rgba(255,255,255,.55); pointer-events:none; }
+  #knob { position:absolute; left:50%; top:50%; width:54px; height:54px; margin:-27px 0 0 -27px; border-radius:50%;
+    background:rgba(244,239,226,.85); border-bottom:4px solid rgba(0,0,0,.25); }
+  #hint { position:fixed; bottom:calc(16px + env(safe-area-inset-bottom,0px)); left:0; right:0;
+    display:flex; justify-content:space-between; padding:0 18px; font-size:12px; color:rgba(255,255,255,.9);
+    text-shadow:0 1px 2px rgba(0,0,0,.6); pointer-events:none; }
+
+  /* panels: title + "encounter goes here" */
+  .cover { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; padding:16px;
+    background:rgba(20,27,46,.55); }
+  .panel { width:100%; max-width:420px; background:var(--panel); border:3px solid var(--edge); border-radius:14px;
+    padding:16px; text-align:center; }
+  h1 { font-family:var(--display); font-size:30px; color:var(--amber); margin:0; }
+  .sub { font-size:13px; color:var(--muted); margin:4px 0 12px; }
+  .skins { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; }
+  .skins button { font-size:24px; padding:8px 10px; margin:0; background:var(--ink); border-bottom-color:#0a0f1c; }
+  .skins button.on { background:var(--amber); border-bottom-color:#b9781f; }
+  button { font-family:var(--display); font-weight:700; font-size:15px; cursor:pointer; background:var(--moss); color:var(--bone);
+    border:none; border-bottom:4px solid var(--moss-dark); padding:12px 14px; border-radius:9px; margin-top:12px; }
+  button:active { transform:translateY(2px); border-bottom-width:2px; }
+  button.primary { background:var(--amber); color:#2a1c05; border-bottom-color:#b9781f; width:100%; }
+  .big { font-size:72px; line-height:1.1; }
+  .name { font-family:var(--display); font-size:20px; color:var(--amber); }
+  .note { font-size:14px; color:var(--muted); margin-top:6px; }
+</style>
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="region" class="hide">THE GRASSLANDS</div>
+<div id="toast" class="hide"></div>
+<div id="stick" class="hide"><div id="knob"></div></div>
+<div id="hint" class="hide"><span>left thumb: walk</span><span>right thumb: turn camera</span></div>
+
+<div id="title" class="cover hide">
+  <div class="panel">
+    <h1>OCTOMON</h1>
+    <p class="sub">3D test · The Grasslands</p>
+    <p class="sub" style="margin:0 0 8px;">Pick your skin</p>
+    <div class="skins" id="skins"></div>
+    <button class="primary" id="go">Start exploring</button>
+  </div>
+</div>
+
+<div id="meet" class="cover hide">
+  <div class="panel">
+    <div class="big" id="meetPic"></div>
+    <div class="name" id="meetName"></div>
+    <p class="note">Encounter goes here (step 2).<br>The catching screen is not in this test.</p>
+    <button class="primary" id="meetOk">Keep walking</button>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script type="module">
+'use strict';
+import * as THREE from 'three';
+
+// ---- Built to be checked ----------------------------------------------------------------
+const params = new URLSearchParams(location.search);
+const tune = new Proxy({}, { get: (_, k) => CONFIG[k].value }); // live: tune.walkSpeed is CONFIG.walkSpeed.value
+const STEP = 1 / 60;            // simulation step in seconds; motion is per second, never per frame
+const clock = window.GAME_CLOCK || { now: () => performance.now() / 1000 }; // a check may inject one
+const CHEAP = params.get('render') === 'cheap'; // a headless shot or check: half resolution, no antialias
+let seed;
+function rng() { // mulberry32; every gameplay random call reads this, never Math.random
+  seed = (seed + 0x6D2B79F5) | 0;
+  let t = Math.imul(seed ^ (seed >>> 15), seed | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+const events = []; // window.game.events: anything the game wants a run to see
+const $ = id => document.getElementById(id);
+
+// ---- Data: the Grasslands only ------------------------------------------------------------
+// One creature for the spike: Grasslet, the common Grasslands one (emoji placeholder, as in
+// the 2D build). The rest of the roster lives in the brief and the 2D build, not here.
+const POOL = [
+  { id:'grasslet', name:'Grasslet',  sprite:'🐛', weight:1 },
+];
+const SKINS = ['🧍','🤠','🥷','🧙','🦸','🧑‍🚀','🧑‍🌾','🧝','🧑‍🎤','🕵️']; // the 2D build's skins
+let skin = SKINS[0];
+
+// ---- Screen ---------------------------------------------------------------------------
+const canvas = $('game');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: !CHEAP });
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+const scene3 = new THREE.Scene();
+const SKY = 0x8fd0ff;
+scene3.background = new THREE.Color(SKY);
+scene3.fog = new THREE.Fog(SKY, 22, 46);
+const camera = new THREE.PerspectiveCamera(tune.camFov, 1, 0.1, 120);
+function fit() {
+  renderer.setPixelRatio(CHEAP ? 0.5 : Math.min(devicePixelRatio || 1, tune.maxPixelRatio));
+  renderer.setSize(innerWidth, innerHeight, false);
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+}
+addEventListener('resize', fit); fit();
+
+scene3.add(new THREE.HemisphereLight(0xdff2ff, 0x3f7d3a, 1.25));
+const sun = new THREE.DirectionalLight(0xffffff, 1.7);
+sun.position.set(-12, 22, 8); scene3.add(sun);
+
+// ---- The world: a block map -------------------------------------------------------------
+// T tree (blocks) · g grass · H tall grass · p path · K shop (blocks, not enterable here)
+const N = 36;
+let MAP = [];
+const wx = tx => tx - N / 2 + 0.5;          // tile -> world
+const tileOf = v => Math.floor(v + N / 2);  // world -> tile
+const at = (tx, tz) => (tx < 0 || tz < 0 || tx >= N || tz >= N) ? 'T' : MAP[tz][tx];
+const SHOP = { x0:20, x1:23, z0:13, z1:16 };
+const START = { x: 18, z: 22 };              // on the path, just south of the crossroads
+
+function makeMap() {
+  const patches = [ [9,9,5], [26,27,5], [10,26,4.6], [27,9,4.6], [23,22,2.6] ];
+  MAP = [];
+  for (let z = 0; z < N; z++) {
+    const row = [];
+    for (let x = 0; x < N; x++) {
+      const edge = Math.min(x, z, N - 1 - x, N - 1 - z);
+      let c = 'g';
+      const onPath = x === 17 || x === 18 || z === 17 || z === 18;
+      for (const [cx, cz, r] of patches) if (Math.hypot(x - cx, z - cz) < r + rng() * 1.4) c = 'H';
+      if (onPath) c = 'p';
+      if (x >= SHOP.x0 && x <= SHOP.x1 && z >= SHOP.z0 && z <= SHOP.z1) c = 'K';
+      const nearStart = Math.abs(x - START.x) < 3 && Math.abs(z - START.z) < 3;
+      if (c === 'g' && !nearStart && rng() < 0.03) c = 'T';
+      if (edge < 2 || (edge === 2 && rng() < 0.45)) c = 'T';
+      row.push(c);
+    }
+    MAP.push(row);
+  }
+}
+
+const mat = () => new THREE.MeshLambertMaterial({ flatShading: true });
+const box = new THREE.BoxGeometry(1, 1, 1);
+const dummy = new THREE.Object3D();
+const tmpColor = new THREE.Color();
+let tufts = null, tuftsByTile = new Map(), worldGroup = null;
+
+function jitter(hex, amt) { // hand-made: no two blocks quite the same colour
+  tmpColor.set(hex); const k = 1 + (rng() - 0.5) * amt;
+  return tmpColor.setRGB(tmpColor.r * k, tmpColor.g * k, tmpColor.b * k);
+}
+function buildWorld() {
+  worldGroup = new THREE.Group(); scene3.add(worldGroup);
+  const GROUND = { g:'#3f7d3a', H:'#2f6a2d', p:'#7a6a4e', K:'#8d7a4e', T:'#244d24' };
+
+  // ground: one block per tile, top face at y = 0
+  const ground = new THREE.InstancedMesh(box, mat(), N * N);
+  let i = 0;
+  for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) {
+    const c = MAP[z][x], lift = c === 'p' ? -0.06 : 0;
+    dummy.position.set(wx(x), -0.5 + lift, wx(z)); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1);
+    dummy.updateMatrix(); ground.setMatrixAt(i, dummy.matrix);
+    ground.setColorAt(i, jitter(GROUND[c], 0.14)); i++;
+  }
+  worldGroup.add(ground);
+
+  // trees: a trunk and one or two leaf blocks
+  const trees = []; for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) if (MAP[z][x] === 'T') trees.push([x, z]);
+  const trunks = new THREE.InstancedMesh(box, mat(), trees.length);
+  const leaves = new THREE.InstancedMesh(box, mat(), trees.length * 2);
+  trees.forEach(([x, z], k) => {
+    const h = 1 + rng() * 1.2;
+    dummy.position.set(wx(x), h / 2, wx(z)); dummy.scale.set(0.42, h, 0.42); dummy.updateMatrix();
+    trunks.setMatrixAt(k, dummy.matrix); trunks.setColorAt(k, jitter('#6b4a2b', 0.2));
+    const s = 1.15 + rng() * 0.35;
+    dummy.position.set(wx(x), h + s / 2 - 0.1, wx(z)); dummy.scale.set(s, s, s); dummy.updateMatrix();
+    leaves.setMatrixAt(k * 2, dummy.matrix); leaves.setColorAt(k * 2, jitter('#1f5a26', 0.25));
+    const s2 = s * 0.62;
+    dummy.position.set(wx(x) + (rng() - 0.5) * 0.3, h + s + s2 / 2 - 0.2, wx(z) + (rng() - 0.5) * 0.3);
+    dummy.scale.set(s2, s2, s2); dummy.updateMatrix();
+    leaves.setMatrixAt(k * 2 + 1, dummy.matrix); leaves.setColorAt(k * 2 + 1, jitter('#2b7a32', 0.25));
+  });
+  worldGroup.add(trunks, leaves);
+
+  // tall grass: thin blades, three or four per tile, that shake when walked through
+  const blades = [];
+  for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) if (MAP[z][x] === 'H') {
+    const n = 3 + (rng() < 0.5 ? 1 : 0), list = [];
+    for (let b = 0; b < n; b++) {
+      list.push(blades.length);
+      blades.push({ x: wx(x) + (rng() - 0.5) * 0.75, z: wx(z) + (rng() - 0.5) * 0.75,
+        h: 0.55 + rng() * 0.45, w: 0.16 + rng() * 0.08, c: rng() < 0.5 ? '#4f9a44' : '#3a8236', shake: 0 });
+    }
+    tuftsByTile.set(z * N + x, list);
+  }
+  tufts = new THREE.InstancedMesh(box, mat(), blades.length);
+  tufts.userData.blades = blades;
+  blades.forEach((b, k) => { placeBlade(k, 0, 0); tufts.setColorAt(k, jitter(b.c, 0.2)); });
+  worldGroup.add(tufts);
+
+  // the shop: a brick block with a roof and a door, seen from the path; not enterable in this test
+  const sx = (wx(SHOP.x0) + wx(SHOP.x1)) / 2, sz = (wx(SHOP.z0) + wx(SHOP.z1)) / 2;
+  const walls = new THREE.Mesh(box, mat()); walls.material.color.set('#9a7f63');
+  walls.position.set(sx, 1.3, sz); walls.scale.set(4, 2.6, 4);
+  const roof = new THREE.Mesh(box, mat()); roof.material.color.set('#f2a63b');
+  roof.position.set(sx, 2.85, sz); roof.scale.set(4.6, 0.5, 4.6);
+  const door = new THREE.Mesh(box, mat()); door.material.color.set('#3a2a1c');
+  door.position.set(sx - 1.2, 0.8, sz + 2.01); door.scale.set(0.9, 1.6, 0.05);
+  const sign = emojiSprite('🏪', 1.6); sign.position.set(sx, 3.15, sz);
+  worldGroup.add(walls, roof, door, sign);
+}
+function placeBlade(k, sway, t) {
+  const b = tufts.userData.blades[k];
+  dummy.position.set(b.x + sway * 0.12, b.h / 2, b.z);
+  dummy.rotation.set(0, 0, -sway * 0.45);
+  dummy.scale.set(b.w, b.h, b.w); dummy.updateMatrix();
+  tufts.setMatrixAt(k, dummy.matrix);
+}
+const shaking = new Set();
+function shakeTile(tx, tz, strength) { // the tile and its neighbours
+  for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+    const list = tuftsByTile.get((tz + dz) * N + (tx + dx)); if (!list) continue;
+    const s = (dx || dz) ? strength * 0.5 : strength;
+    for (const k of list) { const b = tufts.userData.blades[k]; b.shake = Math.max(b.shake, s); shaking.add(k); }
+  }
+}
+function updateBlades(t) {
+  for (const k of shaking) {
+    const b = tufts.userData.blades[k];
+    b.shake = Math.max(0, b.shake - STEP * 1.6);
+    placeBlade(k, Math.sin(t * 38 + k) * b.shake, t);
+    if (b.shake === 0) shaking.delete(k);
+  }
+  if (shaking.size) tufts.instanceMatrix.needsUpdate = true;
+}
+
+// ---- Sprites: emoji on a card that always faces the camera ------------------------------
+const texCache = new Map();
+function emojiTexture(ch) {
+  if (texCache.has(ch)) return texCache.get(ch);
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const x = c.getContext('2d');
+  x.font = '104px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+  x.textAlign = 'center'; x.textBaseline = 'alphabetic'; x.fillText(ch, 64, 112);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  texCache.set(ch, t); return t;
+}
+function emojiSprite(ch, size) {
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: emojiTexture(ch), transparent: true }));
+  s.center.set(0.5, 0.04); s.scale.set(size, size, 1); return s;
+}
+const shadowGeo = new THREE.CircleGeometry(0.42, 20).rotateX(-Math.PI / 2);
+const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.28, depthWrite: false });
+function blobShadow() { const m = new THREE.Mesh(shadowGeo, shadowMat); m.position.y = 0.02; return m; }
+
+let playerSprite, playerShadow;
+function setSkin(ch) {
+  skin = ch;
+  if (playerSprite) { playerSprite.material.map = emojiTexture(ch); playerSprite.material.needsUpdate = true; }
+}
+
+// ---- Input: keys (laptop testing), and the phone's two thumbs ----------------------------
+const down = new Set(), hit = new Set();
+const pressed = code => hit.has(code); // true for one step after the key goes down
+addEventListener('keydown', e => {
+  if (!e.repeat) { down.add(e.code); hit.add(e.code); }
+  if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
+});
+addEventListener('keyup', e => down.delete(e.code));
+addEventListener('blur', () => { down.clear(); stick.id = null; stick.x = stick.y = 0; });
+
+const stick = { id: null, ox: 0, oy: 0, x: 0, y: 0 };  // left thumb: x right, y forward, -1..1
+const look = { id: null, lx: 0, dx: 0 };              // right thumb: pixels dragged since last step
+const taps = new Map();                               // pointerId -> where and when it went down
+canvas.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  taps.set(e.pointerId, { x: e.clientX, y: e.clientY, t: clock.now(), far: false });
+  if (scene !== 'play' || meeting) return;
+  if (e.clientX < innerWidth / 2 && stick.id === null) {
+    stick.id = e.pointerId; stick.ox = e.clientX; stick.oy = e.clientY; stick.x = stick.y = 0;
+    const el = $('stick'); el.style.left = e.clientX + 'px'; el.style.top = e.clientY + 'px';
+    $('knob').style.transform = 'translate(0px,0px)'; el.classList.remove('hide');
+  } else if (look.id === null) { look.id = e.pointerId; look.lx = e.clientX; }
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove', e => {
+  const tp = taps.get(e.pointerId);
+  if (tp && Math.hypot(e.clientX - tp.x, e.clientY - tp.y) > 12) tp.far = true;
+  if (e.pointerId === stick.id) {
+    const R = tune.stickRadius;
+    let dx = e.clientX - stick.ox, dy = e.clientY - stick.oy;
+    const d = Math.hypot(dx, dy); if (d > R) { dx *= R / d; dy *= R / d; }
+    $('knob').style.transform = `translate(${dx}px,${dy}px)`;
+    let mx = dx / R, my = -dy / R; const m = Math.hypot(mx, my);
+    if (m < tune.stickDead) mx = my = 0;
+    stick.x = mx; stick.y = my;
+  } else if (e.pointerId === look.id) { look.dx += e.clientX - look.lx; look.lx = e.clientX; }
+});
+function pointerEnd(e) {
+  const tp = taps.get(e.pointerId); taps.delete(e.pointerId);
+  if (e.pointerId === stick.id) { stick.id = null; stick.x = stick.y = 0; $('stick').classList.add('hide'); }
+  if (e.pointerId === look.id) look.id = null;
+  if (e.type === 'pointerup' && tp && !tp.far && clock.now() - tp.t < 0.35) tapAt(e.clientX, e.clientY);
+}
+canvas.addEventListener('pointerup', pointerEnd);
+canvas.addEventListener('pointercancel', pointerEnd);
+
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+function tapAt(x, y) { // a quick tap on the Octomon
+  if (scene !== 'play' || !creature || meeting || creature.popT < 0.2) return;
+  ndc.set(x / innerWidth * 2 - 1, -(y / innerHeight) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const hits = ray.intersectObject(creature.sprite);
+  const near = projectedDistance(creature.sprite, x, y) < 70; // a thumb is bigger than a sprite edge
+  if (hits.length || near) meet();
+}
+const tmpV = new THREE.Vector3();
+function projectedDistance(obj, x, y) {
+  tmpV.copy(obj.position); tmpV.y += obj.scale.y * 0.5; tmpV.project(camera);
+  return Math.hypot((tmpV.x + 1) / 2 * innerWidth - x, (1 - tmpV.y) / 2 * innerHeight - y);
+}
+
+// ---- State -------------------------------------------------------------------------------
+let scene, state, creature = null, meeting = false, camYaw = 0;
+const P = { x: 0, z: 0, px: 0, pz: 0, fx: 0, fz: -1, speed: 0, phase: 0 }; // player; px/pz last step's
+const C = { x: 0, y: 0, z: 0, px: 0, py: 0, pz: 0 };                       // camera
+function reset() {
+  seed = Number(params.get('seed')) || CONFIG.seed;
+  state = { t: 0, walked: 0, rustles: 0, met: 0, pending: null, lastTile: -1 };
+  P.x = P.px = wx(START.x); P.z = P.pz = wx(START.z); P.fx = 0; P.fz = -1; P.speed = 0; P.phase = 0;
+  camYaw = 0; placeCamera(true);
+  if (creature) removeCreature();
+  meeting = false;
+}
+
+// ---- Walking -----------------------------------------------------------------------------
+const R = 0.3; // the player's footprint radius, blocks
+function free(x, z) {
+  for (const [ox, oz] of [[-R,-R],[R,-R],[-R,R],[R,R]]) {
+    const c = at(tileOf(x + ox), tileOf(z + oz)); if (c === 'T' || c === 'K') return false;
+  }
+  if (creature && Math.hypot(x - creature.x, z - creature.z) < 0.6) return false;
+  return true;
+}
+function walk(dt) {
+  // input: the left thumb, or keys for laptop testing; forward is away from the camera
+  let ix = stick.x, iy = stick.y;
+  if (down.has('KeyA') || down.has('ArrowLeft')) ix -= 1;
+  if (down.has('KeyD') || down.has('ArrowRight')) ix += 1;
+  if (down.has('KeyW') || down.has('ArrowUp')) iy += 1;
+  if (down.has('KeyS') || down.has('ArrowDown')) iy -= 1;
+  const m = Math.min(1, Math.hypot(ix, iy)); if (m > 0) { const k = m / Math.hypot(ix, iy); ix *= k; iy *= k; }
+  if (down.has('KeyQ')) camYaw += tune.camKeyTurn * dt;
+  if (down.has('KeyE')) camYaw -= tune.camKeyTurn * dt;
+  camYaw -= look.dx * tune.camDragTurn; look.dx = 0;
+
+  const fwx = -Math.sin(camYaw), fwz = -Math.cos(camYaw), rx = Math.cos(camYaw), rz = -Math.sin(camYaw);
+  const dx = rx * ix + fwx * iy, dz = rz * ix + fwz * iy;
+  P.px = P.x; P.pz = P.z;
+  P.speed = m;
+  if (m > 0) {
+    const v = tune.walkSpeed * dt;
+    const nx = P.x + dx * v, nz = P.z + dz * v;
+    if (free(nx, P.z)) P.x = nx;          // slide along walls: each axis on its own
+    if (free(P.x, nz)) P.z = nz;
+    const moved = Math.hypot(P.x - P.px, P.z - P.pz);
+    if (moved > 0) { P.fx = dx / m; P.fz = dz / m; }
+    P.phase += tune.bobRate * 2 * dt * m;
+    // the camera swings behind a walking player, never while walking back toward it
+    if (tune.camAutoTurn > 0 && iy > -0.3) {
+      const want = Math.atan2(-dx, -dz);
+      let d = want - camYaw; d = Math.atan2(Math.sin(d), Math.cos(d));
+      camYaw += d * (1 - Math.exp(-tune.camAutoTurn * dt)) * m * Math.min(1, Math.abs(ix) + 0.25);
+    }
+    grass(moved);
+  } else P.phase = 0;
+}
+
+// ---- Tall grass: rustle, then an Octomon appears ----------------------------------------
+function grass(moved) {
+  const tx = tileOf(P.x), tz = tileOf(P.z), id = tz * N + tx;
+  if (at(tx, tz) !== 'H') { state.walked = 0; state.lastTile = id; return; }
+  if (id !== state.lastTile) { shakeTile(tx, tz, 0.35); state.lastTile = id; } // stepping in shakes it a little
+  state.walked += moved;
+  if (state.walked < 1) return;
+  state.walked -= 1;
+  if (creature || state.pending) return;
+  if (rng() < tune.rustleRate) {
+    const spot = appearSpot();
+    if (!spot) return;
+    state.pending = { t: tune.rustleTime, x: spot.x, z: spot.z };
+    shakeTile(tileOf(spot.x), tileOf(spot.z), 1);
+    state.rustles++; events.push({ type: 'rustle', step: Math.round(state.t / STEP) });
+  }
+}
+function appearSpot() { // in front of the player, on open ground, nudged sideways if a tree is there
+  for (const turn of [0, 0.5, -0.5, 1, -1, 1.6, -1.6]) {
+    const c = Math.cos(turn), s = Math.sin(turn);
+    const fx = P.fx * c - P.fz * s, fz = P.fx * s + P.fz * c;
+    const x = P.x + fx * tune.appearDist, z = P.z + fz * tune.appearDist;
+    const t = at(tileOf(x), tileOf(z));
+    if (t !== 'T' && t !== 'K') return { x, z };
+  }
+  return null;
+}
+function roll() {
+  let total = 0; POOL.forEach(d => total += d.weight);
+  let r = rng() * total;
+  for (const d of POOL) { r -= d.weight; if (r <= 0) return d; }
+  return POOL[0];
+}
+function spawnCreature(x, z) {
+  const d = roll();
+  const sprite = emojiSprite(d.sprite, tune.creatureSize);
+  const shadow = blobShadow();
+  sprite.position.set(x, 0, z); shadow.position.set(x, 0.02, z);
+  scene3.add(sprite, shadow);
+  creature = { d, x, z, sprite, shadow, t: 0, popT: 0 };
+  toast(`A wild <b>${d.name}</b> appears! Tap it.`);
+  events.push({ type: 'appear', id: d.id, step: Math.round(state.t / STEP) });
+}
+function removeCreature() {
+  scene3.remove(creature.sprite, creature.shadow); creature = null; toast(null);
+}
+function updateCreature(dt) {
+  if (state.pending) {
+    state.pending.t -= dt;
+    shakeTile(tileOf(state.pending.x), tileOf(state.pending.z), 1);
+    if (state.pending.t <= 0) { spawnCreature(state.pending.x, state.pending.z); state.pending = null; }
+  }
+  if (!creature) return;
+  creature.t += dt; creature.popT = Math.min(1, creature.popT + dt / 0.35);
+  // walked away: it slips back into the grass
+  if (!meeting && Math.hypot(P.x - creature.x, P.z - creature.z) > 12) { removeCreature(); return; }
+}
+function meet() {
+  meeting = true; state.met++;
+  $('meetPic').textContent = creature.d.sprite;
+  $('meetName').textContent = 'Wild ' + creature.d.name;
+  $('meet').classList.remove('hide');
+  stick.id = null; stick.x = stick.y = 0; $('stick').classList.add('hide'); look.id = null;
+  events.push({ type: 'meet', id: creature.d.id, step: Math.round(state.t / STEP) });
+}
+function endMeet() { meeting = false; $('meet').classList.add('hide'); if (creature) removeCreature(); }
+$('meetOk').addEventListener('click', endMeet);
+function toast(html) { const el = $('toast'); if (!html) { el.classList.add('hide'); return; } el.innerHTML = html; el.classList.remove('hide'); }
+
+// ---- Camera: behind and slightly above, catching up smoothly ----------------------------
+function faceSpot(dt, s) { // while it pops up: swing round so it is in view, a little to one side of the player
+  const want = Math.atan2(P.x - s.x, P.z - s.z) + tune.appearSideAngle;
+  let d = want - camYaw; d = Math.atan2(Math.sin(d), Math.cos(d));
+  camYaw += d * (1 - Math.exp(-8 * dt));
+}
+function clearDistance() { // how far back the camera can sit before a tree or the shop is in the way
+  const sx = Math.sin(camYaw), sz = Math.cos(camYaw);
+  for (let d = 0.5; d <= tune.camDistance; d += 0.25) {
+    const c = at(tileOf(P.x + sx * d), tileOf(P.z + sz * d));
+    if (c === 'T' || c === 'K') return Math.max(1.4, d - 0.6);
+  }
+  return tune.camDistance;
+}
+function placeCamera(snap, dt = STEP) {
+  const d = clearDistance(), f = d / tune.camDistance;
+  const tx = P.x + Math.sin(camYaw) * d, tz = P.z + Math.cos(camYaw) * d;
+  const ty = Math.max(1.8, tune.camHeight * f);
+  C.px = C.x; C.py = C.y; C.pz = C.z;
+  if (snap) { C.x = C.px = tx; C.y = C.py = ty; C.z = C.pz = tz; return; }
+  const curD = Math.hypot(C.x - P.x, C.z - P.z);
+  const k = d < curD - 0.3 ? 1 : 1 - Math.exp(-tune.camFollow * dt); // pulled in: at once, never through a tree
+  C.x += (tx - C.x) * k; C.y += (ty - C.y) * k; C.z += (tz - C.z) * k;
+}
+
+// ---- Scenes ------------------------------------------------------------------------------
+// title: pick a skin. play: the world. figures: every Octomon and the player side by side.
+const scenes = {
+  title: {
+    update() { if (pressed('Enter') || pressed('Space')) startPlay(); },
+  },
+  play: {
+    update(dt) {
+      state.t += dt;
+      const popping = state.pending || (creature && creature.popT < 1);
+      if (!meeting && !popping) walk(dt);
+      else { P.px = P.x; P.pz = P.z; P.speed = 0; look.dx = 0; }
+      if (popping) faceSpot(dt, state.pending || creature);
+      if (meeting && (pressed('Enter') || pressed('Space'))) endMeet();
+      else if (!meeting && creature && creature.popT >= 1 && (pressed('Enter') || pressed('Space'))) meet(); // laptop testing
+      updateCreature(dt);
+      placeCamera(false, dt);
+      updateBlades(state.t);
+    },
+  },
+  figures: {
+    update(dt) { state.t += dt; },
+  },
+};
+function startPlay() {
+  reset(); scene = 'play';
+  $('title').classList.add('hide');
+  ['region', 'hint'].forEach(id => $(id).classList.remove('hide'));
+  events.push({ type: 'scene', name: 'play' });
+}
+function showTitle() {
+  const row = $('skins'); row.innerHTML = '';
+  SKINS.forEach(sk => {
+    const b = document.createElement('button'); b.textContent = sk; if (sk === skin) b.className = 'on';
+    b.onclick = () => { setSkin(sk); showTitle(); };
+    row.appendChild(b);
+  });
+  $('title').classList.remove('hide');
+}
+$('go').addEventListener('click', startPlay);
+
+// ---- Drawing ----------------------------------------------------------------------------
+const lerp = (a, b, t) => a + (b - a) * t;
+function drawFrame() {
+  if (camera.fov !== tune.camFov) { camera.fov = tune.camFov; camera.updateProjectionMatrix(); }
+  const a = ALPHA;
+  const x = lerp(P.px, P.x, a), z = lerp(P.pz, P.z, a);
+  const hop = Math.abs(Math.sin(P.phase)) * tune.bobHeight * P.speed;
+  playerSprite.position.set(x, hop, z);
+  const sq = 1 + Math.sin(P.phase * 2) * 0.05 * P.speed; // a little squash on each landing
+  playerSprite.scale.set(tune.playerSize / sq, tune.playerSize * sq, 1);
+  playerShadow.position.set(x, 0.02, z);
+  playerShadow.scale.setScalar(1 - hop * 0.8);
+  if (creature) {
+    const c = creature, pop = c.popT < 1 ? Math.sin(c.popT * Math.PI * 0.75) / Math.sin(Math.PI * 0.75) : 1;
+    const b = Math.sin(c.t * tune.breathRate * 2);
+    const s = tune.creatureSize * Math.max(0.01, pop);
+    c.sprite.scale.set(s * (1 - b * 0.02), s * (1 + b * 0.04), 1);
+    c.sprite.position.y = (b * 0.5 + 0.5) * 0.12;
+  }
+  if (scene === 'figures') {
+    camera.position.set(wx(START.x), 1.6, wx(START.z) + 5); camera.lookAt(wx(START.x), 0.9, wx(START.z) - 1);
+  } else {
+    camera.position.set(lerp(C.px, C.x, a), lerp(C.py, C.y, a), lerp(C.pz, C.z, a));
+    camera.lookAt(x, 1.0, z);
+  }
+  renderer.render(scene3, camera);
+}
+
+// ---- Loop: fixed step, frame time clamped ---------------------------------------------
+function step() { scenes[scene].update(STEP); hit.clear(); }
+let last, acc = 0, ALPHA = 1; // ALPHA: how far the frame is between the last two steps
+function tick() {
+  const now = clock.now();
+  acc += Math.min(now - last, 0.25); last = now; // a stall never fast-forwards the game
+  while (acc >= STEP) { step(); acc -= STEP; }
+  ALPHA = acc / STEP;
+  drawFrame();
+}
+function frame() { tick(); requestAnimationFrame(frame); }
+function timer() { if (document.visibilityState === 'visible' && clock.now() - last > 0.1) tick(); }
+
+// ---- What a check can read and drive (?manual=1 stops the loop; players never see it) ----
+window.game = {
+  get scene() { return scene; },
+  get state() { return state; },
+  get player() { return { x: P.x, z: P.z, yaw: camYaw }; },
+  get creature() { return creature && { id: creature.d.id, x: creature.x, z: creature.z }; },
+  press(code) { hit.add(code); },
+  hold(code, on) { on ? down.add(code) : down.delete(code); },
+  get events() { return events; },
+  step(n = 1, draw = true, alpha = 1) {
+    for (let i = 0; i < n; i++) step();
+    if (draw) { ALPHA = alpha; drawFrame(); }
+  },
+};
+
+// ---- Boot ----------------------------------------------------------------------------------
+seed = Number(params.get('seed')) || CONFIG.seed;
+makeMap(); buildWorld();
+playerSprite = emojiSprite(skin, tune.playerSize); playerShadow = blobShadow();
+scene3.add(playerSprite, playerShadow);
+reset();
+scene = params.get('scene') || 'title';
+if (scene === 'title') showTitle();
+if (scene === 'play') startPlay();
+if (scene === 'figures') { // every Octomon in the test and the player, in play's look
+  POOL.forEach((d, i) => { const s = emojiSprite(d.sprite, tune.creatureSize); s.position.set(wx(START.x) - 3 + i * 2, 0, wx(START.z) - 1); scene3.add(s); });
+  P.x = P.px = wx(START.x) + 3; P.z = P.pz = wx(START.z) - 1;
+  camera.position.set(wx(START.x), 1.6, wx(START.z) + 5);
+  scenes.figures.update = dt => { state.t += dt; };
+}
+last = clock.now();
+if (params.get('manual') === '1') drawFrame();
+else { requestAnimationFrame(frame); setInterval(timer, 50); }
+</script>
+</body>
+</html>
