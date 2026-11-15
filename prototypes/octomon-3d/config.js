@@ -1,5 +1,6 @@
 // PROTOTYPE - NOT FOR PRODUCTION
-// Question: Does a 3D walkable world feel better on a phone than the 2D grid?
+// Question: Does a 3D walkable world feel better on a phone than the 2D grid? (round 1: yes)
+// Step 2: the 2D build's encounter screen, ported in for Grasslet.
 // Date: 2026-11-14
 // Every tuning value lives here, each with value, min, max and step. The game reads them live
 // through tune.<name> (index.html). Change these between round 1 and round 2.
@@ -32,6 +33,16 @@ window.CONFIG = {
   appearSideAngle: { value: 0.4, min: 0, max: 1, step: 0.05 }, // radians the camera sits off to one side as it appears, so the player never hides it
   creatureSize:{ value: 1.7,  min: 0.6, max: 4,   step: 0.1 },  // the Octomon sprite's height, in blocks
   breathRate:  { value: 2.6,  min: 0.5, max: 8,   step: 0.1 },  // breaths per second, radians/s / 2 (the 2D bob is 2.4 s)
+
+  // ---- Encounter: ported from the 2D build, Grasslet's numbers there ----
+  startBalls:    { value: 10,   min: 1,   max: 30,  step: 1 },    // Octeo balls at the start (the brief's first minute); reload refills
+  grassletHp:    { value: 16,   min: 4,   max: 60,  step: 1 },    // Grasslet's HP (2D: hp 16)
+  grassletBase:  { value: 0.34, min: 0,   max: 0.95, step: 0.01 }, // catch chance at full HP (2D: base .34)
+  hpOddsBonus:   { value: 0.55, min: 0,   max: 1,   step: 0.01 }, // chance added as HP falls to 0 (2D: .55)
+  maxOdds:       { value: 0.95, min: 0.5, max: 1,   step: 0.01 }, // the catch chance never goes above this (2D: .95)
+  weakenMin:     { value: 4,    min: 1,   max: 15,  step: 1 },    // smallest Weaken hit (2D: 4, no Strong arm perk)
+  weakenRand:    { value: 4,    min: 1,   max: 10,  step: 1 },    // a hit adds 0 to this minus 1 (2D: 4, so 4 to 7)
+  escapeTurns:   { value: 9,    min: 2,   max: 30,  step: 1 },    // it escapes on this many turns (2D: 9)
 
   // ---- Screen ----
   maxPixelRatio: { value: 2,  min: 1,   max: 3,   step: 0.5 },  // caps the phone's pixel density for speed

@@ -1,7 +1,7 @@
 <!-- PROTOTYPE - NOT FOR PRODUCTION -->
 # OCTOMON 3D — walkable-world spike
 
-**Status:** in progress — round 1 ready to play (2026-11-14)
+**Status:** step 1 concluded: round 1 passed, 3D stays. Step 2 (the encounter screen, ported) built (2026-11-14)
 
 ## The question
 
@@ -24,12 +24,17 @@ never touches).
    Space taps.
 4. Walking through tall grass shakes it. Each block walked in tall grass has the 2D build's
    Grasslands chance (34%) to rustle hard, and a **Grasslet** (the only creature in the spike)
-   pops up in front of you, bobbing and breathing. Tapping it
-   shows "Encounter goes here (step 2)" and puts you back to walking.
-5. All tuning is in `config.js`: walk speed, camera distance, height and follow, auto-turn,
-   joystick size, rustle rate and more. Round 2's changes go there.
+   pops up in front of you, bobbing and breathing.
+5. **Step 2:** tapping it opens the 2D build's encounter screen, ported, not rebuilt: Weaken
+   (red flinch, floating damage number), Throw Octeo ball (the arc and the three wobbles), Run,
+   the HP bar and the catch odds, with the 2D rules and numbers for Grasslet. You start with 10
+   balls (counter top left); a reload refills them. After a catch, a run or an escape the
+   Grasslet leaves the grass and you walk on.
+6. All tuning is in `config.js`: walk speed, camera, joystick, rustle rate, and the encounter's
+   numbers (balls, Grasslet's HP and catch chance, Weaken hits, escape turns), each noted with
+   its 2D value.
 
-Out of scope, on purpose: catching, encounter screen, balls, money, shop, Octo Log, Hypercar,
+Out of scope, on purpose: money, shop, Sandstone, perks and family names, Octo Log, Hypercar,
 the other three regions, every Octomon except Grasslet (the brief and the 2D build hold the
 roster, for reference only), sound, Asher's drawings (the creatures and skins are emoji placeholders,
 as in the 2D build).
@@ -58,8 +63,8 @@ Play it **next to the 2D build on the same phone**. That comparison is the whole
 
 ## Findings
 
-*(Fill in after each round.)*
-
-- Round 1:
-- Round 2:
-- Verdict: *(keep 3D and go on to step 2 / keep the 2D game)*
+- Round 1 (Asher, on the phone): the 3D world was played and liked. The request that came out
+  of it was catching: he wants to catch Octomon in the 3D world.
+- Round 2: not needed; round 1 settled it.
+- Verdict: **3D stays.** We are not going back to the 2D grid. On to Build order step 2: the
+  encounter screen, ported from the 2D build (built; item 5 above).
