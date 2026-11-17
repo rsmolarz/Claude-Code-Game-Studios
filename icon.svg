@@ -1,0 +1,33 @@
+<!-- PROTOTYPE - NOT FOR PRODUCTION -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- The Octeo ball, after Asher's drawing: a ring with the beach inside it (sun, sea, sand).
+       Everything sits inside the central 80% so a maskable crop never cuts the ring. -->
+  <defs>
+    <clipPath id="inside"><circle cx="256" cy="256" r="166"/></clipPath>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5fb8f5"/>
+      <stop offset="1" stop-color="#bfe6ff"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="#141b2e"/>
+
+  <g clip-path="url(#inside)">
+    <rect x="80" y="80" width="352" height="352" fill="url(#sky)"/>
+    <!-- sun -->
+    <circle cx="318" cy="186" r="44" fill="#ffd34d"/>
+    <circle cx="318" cy="186" r="58" fill="#ffd34d" opacity=".25"/>
+    <!-- sea -->
+    <path d="M80 262 Q116 248 152 262 T224 262 T296 262 T368 262 T440 262 V340 H80 Z" fill="#2f7fd1"/>
+    <path d="M80 284 Q116 272 152 284 T224 284 T296 284 T368 284 T440 284" fill="none" stroke="#8fd0ff" stroke-width="7" stroke-linecap="round"/>
+    <!-- sand -->
+    <path d="M80 330 Q180 300 270 318 T440 312 V440 H80 Z" fill="#f2cf8a"/>
+    <circle cx="190" cy="372" r="5" fill="#d9ad5f"/>
+    <circle cx="300" cy="388" r="5" fill="#d9ad5f"/>
+    <circle cx="246" cy="404" r="4" fill="#d9ad5f"/>
+  </g>
+
+  <!-- the ring -->
+  <circle cx="256" cy="256" r="181" fill="none" stroke="#101728" stroke-width="38"/>
+  <circle cx="256" cy="256" r="181" fill="none" stroke="#f2a63b" stroke-width="26"/>
+  <circle cx="256" cy="256" r="181" fill="none" stroke="#ffd08a" stroke-width="6" stroke-dasharray="60 420" stroke-dashoffset="-40" stroke-linecap="round"/>
+</svg>
