@@ -59,6 +59,22 @@
   .skins { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; }
   .skins button { font-size:24px; padding:8px 10px; margin:0; background:var(--ink); border-bottom-color:#0a0f1c; }
   .skins button.on { background:var(--amber); border-bottom-color:#b9781f; }
+  .skins button.locked { opacity:.32; cursor:not-allowed; position:relative; }
+  .skins button.locked::after { content:'🔒'; position:absolute; right:1px; bottom:0; font-size:11px; }
+
+  /* who is playing */
+  .who { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; }
+  .who button { margin:0; font-size:13px; padding:9px 12px; background:var(--ink); border-bottom-color:#0a0f1c;
+    display:flex; align-items:center; gap:6px; }
+  .who button.on { background:var(--amber); color:#2a1c05; border-bottom-color:#b9781f; }
+  .who button .f { font-size:18px; }
+  .who button .c { font-size:10px; opacity:.75; font-family:var(--body); }
+  .who button.add { background:var(--moss); border-bottom-color:var(--moss-dark); }
+  .addRow { display:flex; gap:6px; justify-content:center; margin-top:8px; }
+  .addRow input { font-family:var(--body); font-size:16px; padding:9px 11px; border-radius:9px;
+    border:2px solid #3b4a7a; background:var(--ink); color:var(--bone); width:150px; }
+  .addRow input:focus { outline:3px solid var(--amber); outline-offset:1px; }
+  .addRow button { margin:0; width:auto; font-size:13px; padding:9px 14px; }
   button { font-family:var(--display); font-weight:700; font-size:15px; cursor:pointer; background:var(--moss); color:var(--bone);
     border:none; border-bottom:4px solid var(--moss-dark); padding:12px 14px; border-radius:9px; margin-top:12px; }
   button:active { transform:translateY(2px); border-bottom-width:2px; }
@@ -162,7 +178,13 @@
   <div class="panel">
     <h1>OCTOMON</h1>
     <p class="sub">Four regions · Catch them all</p>
-    <p class="sub" style="margin:0 0 8px;">Pick your skin</p>
+    <p class="sub" style="margin:0 0 8px;">Who's playing?</p>
+    <div class="who" id="who"></div>
+    <div id="addRow" class="addRow hide">
+      <input type="text" id="newName" maxlength="12" placeholder="Name" autocomplete="off">
+      <button class="primary" id="addGo">Add</button>
+    </div>
+    <p class="sub" id="skinLine" style="margin:14px 0 8px;">Pick your skin</p>
     <div class="skins" id="skins"></div>
     <button class="primary" id="go">Start exploring</button>
   </div>
@@ -196,7 +218,7 @@
 <!-- OCTO LOG: what you have caught, and the slots still empty -->
 <div id="logScreen" class="cover hide">
   <div class="panel">
-    <h2 class="logTitle">OCTO LOG</h2>
+    <h2 class="logTitle" id="logHeading">OCTO LOG</h2>
     <div id="cards" class="cards"></div>
     <p class="sub" id="logNote"></p>
     <button class="primary" id="logClose">Back to the world</button>
@@ -289,7 +311,18 @@ const REGIONS = {
   blocky: { name:'THE BLOCKY LANDS',  hide:'B', icon:'🧱', at:[26, 26] },
   cross:  { name:'THE CROSSROADS',    hide:null },
 };
-const SKINS = ['🧍','🤠','🥷','🧙','🦸','🧑‍🚀','🧑‍🌾','🧝','🧑‍🎤','🕵️']; // the 2D build's skins
+// Skins. The first twelve are there from the start; the rest unlock as the Octo Log fills, one
+// per catch, so catching an Octomon earns you something even when you already have it.
+const SKINS = [
+  '🧍','🧒','👧','🧑','🧔','👩',                 // just people, to start
+  '🤠','🥷','🧙','🦸','🧑‍🚀','🕵️',                 // and the obvious fun ones
+  '🧝','🧑‍🌾','🧑‍🎤','🦹','🧚','🧜',                 // unlocked from here on
+  '🧞','🧛','🤴','👸','🥸','🤿',
+  '👽','🤖','🎅','🦝','🐻','🦊',
+];
+const FREE_SKINS = 12;
+const skinLocked = i => i >= FREE_SKINS && logCount() < (i - FREE_SKINS + 1);
+const skinUnlockAt = i => i - FREE_SKINS + 1;
 let skin = SKINS[0];
 
 // ---- Screen ---------------------------------------------------------------------------
@@ -601,31 +634,64 @@ function projectedDistance(obj, x, y) {
 // ---- The Octo Log, and saving -------------------------------------------------------------
 // This is an installed app now: it gets closed and reopened, so a catch has to survive that.
 // Only what was caught is saved — the world rebuilds itself from the seed, and balls refill.
+// One iPad, more than one kid. Each family member gets their own game: their own Octo Log,
+// their own money, their own skin. Nobody's catches end up in somebody else's log.
 const SAVE_KEY = 'octomon-3d-save-v1';
+const MAX_PLAYERS = 6;
+let players = [];        // [{ name, skin, caught:[], coins, sand, car, evolved, balls }]
+let current = 0;         // whose game is loaded
 let caught = new Set();
 let coins = 0, sand = 0, hasCar = false, evolved = false;
 const money = n => '$' + n.toFixed(2);
+const blankPlayer = (name, sk) => ({
+  name, skin: sk || SKINS[0], caught: [], coins: 0, sand: 0, car: false, evolved: false, balls: CONFIG.balls,
+});
 
+function packPlayer() {   // the game in play, written back into the roster
+  const p = players[current]; if (!p) return;
+  p.skin = skin; p.caught = [...caught]; p.coins = coins;
+  p.sand = sand; p.car = hasCar; p.evolved = evolved; p.balls = balls;
+}
+function unpackPlayer(i) {   // and a roster entry loaded into the game
+  current = Math.max(0, Math.min(i, players.length - 1));
+  const p = players[current];
+  caught = new Set((p.caught || []).filter(id => POOL.some(d => d.id === id)));
+  coins = Math.max(0, p.coins || 0); sand = Math.max(0, p.sand || 0);
+  hasCar = !!p.car; evolved = !!p.evolved;
+  balls = Number.isFinite(p.balls) ? p.balls : CONFIG.balls;
+  skin = SKINS.includes(p.skin) ? p.skin : SKINS[0];
+  // King Crab Pants is per player: one child's evolution is not another's
+  const crab = POOL.find(d => d.id === 'crab');
+  crab.name = evolved ? 'King Crab Pants' : 'Mr. Crab Pants';
+  crab.sprite = evolved ? '👑' : '🦀';
+}
 function saveGame() {
   try {
-    localStorage.setItem(SAVE_KEY, JSON.stringify({
-      v: 2, caught: [...caught], skin, coins, sand, car: hasCar, evolved,
-    }));
+    packPlayer();
+    localStorage.setItem(SAVE_KEY, JSON.stringify({ v: 3, players, current }));
   } catch (e) { /* private window, or storage full: the game still plays, it just forgets */ }
 }
 function loadGame() {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
-    if (!raw) return;
+    if (!raw) { players = []; return; }
     const d = JSON.parse(raw);
-    if (!d) return;
-    // a v1 save has no money in it: those fields just start at zero
-    if (Array.isArray(d.caught)) caught = new Set(d.caught.filter(id => POOL.some(p => p.id === id)));
-    if (typeof d.skin === 'string' && SKINS.includes(d.skin)) skin = d.skin;
-    if (Number.isFinite(d.coins)) coins = Math.max(0, d.coins);
-    if (Number.isFinite(d.sand)) sand = Math.max(0, d.sand);
-    hasCar = !!d.car; evolved = !!d.evolved;
-  } catch (e) { caught = new Set(); coins = sand = 0; hasCar = evolved = false; }
+    if (!d) { players = []; return; }
+    if (Array.isArray(d.players) && d.players.length) {        // v3: a roster
+      players = d.players.slice(0, MAX_PLAYERS).map(p => ({ ...blankPlayer(String(p.name || 'Player')), ...p }));
+      unpackPlayer(Number.isFinite(d.current) ? d.current : 0);
+      return;
+    }
+    // v1 and v2 saved a single game with no name on it. It is this iPad's first player, and
+    // it is Asher's game, so it carries over to him rather than being thrown away.
+    const one = blankPlayer('Asher');
+    if (Array.isArray(d.caught)) one.caught = d.caught;
+    if (typeof d.skin === 'string') one.skin = d.skin;
+    if (Number.isFinite(d.coins)) one.coins = d.coins;
+    if (Number.isFinite(d.sand)) one.sand = d.sand;
+    one.car = !!d.car; one.evolved = !!d.evolved;
+    players = [one]; unpackPlayer(0);
+  } catch (e) { players = []; caught = new Set(); coins = sand = 0; hasCar = evolved = false; }
 }
 // Mr. Crab Pants' special evolution: Asher's rule — eight Sandstone, and you must have caught him.
 function checkEvolve() {
@@ -639,6 +705,8 @@ function checkEvolve() {
 }
 function logCount() { return caught.size; }
 function drawLog() {
+  const me = players[current];
+  $('logHeading').textContent = me ? me.name.toUpperCase() + "'S OCTO LOG" : 'OCTO LOG';
   const box = $('cards'); box.innerHTML = '';
   POOL.forEach(d => {
     const got = caught.has(d.id);
@@ -737,7 +805,11 @@ function reset() {
   camYaw = 0; placeCamera(true);
   if (creature) removeCreature();
   meeting = false; $('fight').classList.add('hide');
-  balls = tune.startBalls; hud();
+  // Balls belong to the player, not to the session: a game resumed mid-way keeps what it had,
+  // and only a brand-new player starts on a full pocket.
+  const p = players[current];
+  balls = (p && Number.isFinite(p.balls)) ? p.balls : tune.startBalls;
+  hud();
 }
 
 // ---- Walking -----------------------------------------------------------------------------
@@ -1073,6 +1145,8 @@ function closeLog() { $('logScreen').classList.add('hide'); }
 $('logBtn').addEventListener('click', openLog);
 $('logClose').addEventListener('click', closeLog);
 $('shopClose').addEventListener('click', closeShop);
+$('addGo').addEventListener('click', addPlayer);
+$('newName').addEventListener('keydown', e => { if (e.key === 'Enter') addPlayer(); });
 $('carBtn').addEventListener('click', openCar);
 $('carClose').addEventListener('click', closeCar);
 
@@ -1135,14 +1209,54 @@ function startPlay() {
   events.push({ type: 'scene', name: 'play' });
 }
 function showTitle() {
-  const row = $('skins'); row.innerHTML = '';
+  if (!players.length) { players = [blankPlayer('Player 1')]; unpackPlayer(0); }
+
+  // who is playing: one button each, plus a + to add somebody
+  const whoRow = $('who'); whoRow.innerHTML = '';
+  players.forEach((p, i) => {
+    const b = document.createElement('button');
+    if (i === current) b.className = 'on';
+    b.innerHTML = `<span class="f">${p.skin}</span>${p.name}<span class="c">${(p.caught || []).length}/${LOG_SLOTS}</span>`;
+    b.onclick = () => { saveGame(); unpackPlayer(i); setSkin(skin); saveGame(); showTitle(); };
+    whoRow.appendChild(b);
+  });
+  if (players.length < MAX_PLAYERS) {
+    const add = document.createElement('button'); add.className = 'add'; add.textContent = '+ Add player';
+    add.onclick = () => { $('addRow').classList.remove('hide'); $('newName').focus(); };
+    whoRow.appendChild(add);
+  }
+
+  // skins: the first twelve from the start, the rest earned by filling the Octo Log
   setSkin(skin);
-  SKINS.forEach(sk => {
-    const b = document.createElement('button'); b.textContent = sk; if (sk === skin) b.className = 'on';
-    b.onclick = () => { setSkin(sk); showTitle(); };
+  const row = $('skins'); row.innerHTML = '';
+  SKINS.forEach((sk, i) => {
+    const locked = skinLocked(i);
+    const b = document.createElement('button');
+    b.textContent = sk;
+    b.className = (sk === skin ? 'on' : '') + (locked ? ' locked' : '');
+    b.title = locked ? `Catch ${skinUnlockAt(i)} Octomon to unlock` : sk;
+    b.onclick = () => {
+      if (locked) { $('skinLine').textContent = `Locked — catch ${skinUnlockAt(i)} Octomon to unlock this one`; return; }
+      setSkin(sk); saveGame(); showTitle();
+    };
     row.appendChild(b);
   });
+  const nextLock = SKINS.findIndex((_, i) => skinLocked(i));
+  $('skinLine').textContent = nextLock === -1
+    ? 'Pick your skin — every skin unlocked'
+    : `Pick your skin — ${SKINS.length - nextLock} more unlock as you catch Octomon`;
+
   $('title').classList.remove('hide');
+}
+function addPlayer() {
+  const el = $('newName');
+  const name = el.value.trim().slice(0, 12);
+  if (!name || players.length >= MAX_PLAYERS) return;
+  saveGame();
+  players.push(blankPlayer(name, SKINS[players.length % FREE_SKINS]));
+  unpackPlayer(players.length - 1);
+  el.value = ''; $('addRow').classList.add('hide');
+  setSkin(skin); saveGame(); showTitle();
 }
 $('go').addEventListener('click', startPlay);
 
@@ -1190,6 +1304,7 @@ function timer() { if (document.visibilityState === 'visible' && clock.now() - l
 // ---- What a check can read and drive (?manual=1 stops the loop; players never see it) ----
 window.__door = () => ({ x: DOOR.x, z: DOOR.z, cooldown: shopCooldown });
 window.__wallet = () => ({ coins, sand, car: hasCar, evolved, balls });
+window.__players = () => ({ list: players.map(p => ({ n: p.name, s: p.skin, c: (p.caught||[]).length, coins: p.coins })), current });
 window.__give = (c, sd) => { coins += c; sand += sd || 0; saveGame(); hudMoney(); if (!$("shopScreen").classList.contains("hide")) drawShop(); };
 window.__roll = cell => roll(cell);                                  // a check inspects the spawn table
 window.__catchAll = () => { POOL.filter(d => !d.lastOne).forEach(d => caught.add(d.id)); saveGame(); hudLog(); };
@@ -1224,7 +1339,7 @@ window.game = {
 
 // ---- Boot ----------------------------------------------------------------------------------
 if (params.get('fresh') !== '1') loadGame();   // ?fresh=1 starts a clean game, for checking
-if (evolved) { const c = POOL.find(d => d.id === 'crab'); c.name = 'King Crab Pants'; c.sprite = '👑'; }
+// (King Crab Pants is set per player, in unpackPlayer)
 seed = Number(params.get('seed')) || CONFIG.seed;
 makeMap(); buildWorld();
 playerSprite = emojiSprite(skin, tune.playerSize); playerShadow = blobShadow();
