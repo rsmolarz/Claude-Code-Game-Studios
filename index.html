@@ -133,6 +133,20 @@
   .card .s{font-size:26px; line-height:1.1;}
   .card .n{font-family:var(--display); font-size:10px; margin-top:4px; word-break:break-word;}
   .card .r{font-size:9px; color:var(--muted);}
+
+  /* the shop and the Hypercar */
+  #carBtn{position:fixed; top:calc(52px + env(safe-area-inset-top,0px)); right:10px; z-index:6;
+    font-size:18px; padding:7px 11px; border-radius:9px; background:var(--edge);
+    border:none; border-bottom:3px solid #212a4a; cursor:pointer;}
+  .shelf{display:flex; align-items:center; gap:10px; background:var(--ink); border-radius:10px;
+    padding:9px; margin-bottom:7px; text-align:left;}
+  .shelf .ic{font-size:24px;}
+  .shelf .txt{flex:1; font-size:12px; line-height:1.4;}
+  .shelf .txt b{display:block; font-family:var(--display); font-size:12px; color:var(--amber);}
+  /* button.primary is width:100% — the shop's Buy buttons must not be, or they crush the text */
+  .shelf button{margin:0; font-size:12px; padding:9px 12px; width:auto; flex:0 0 auto; min-width:84px;}
+  .price{color:#f2d24b; font-family:var(--display); font-size:12px;}
+  #shopLog:empty{display:none;}   /* no empty bar before you have bought anything */
 </style>
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
 </head>
@@ -154,8 +168,30 @@
   </div>
 </div>
 
-<div id="balls" class="hide">🟣 <b id="hBalls">10</b></div>
+<div id="balls" class="hide">🟣 <b id="hBalls">10</b> &nbsp; 🟨 <b id="hSand">0</b> &nbsp; 💰 <b id="hCoins">0.00</b></div>
 <button id="logBtn" class="hide">📕 <b id="hCaught">0</b>/8</button>
+<button id="carBtn" class="hide">🏎️</button>
+
+<!-- THE SHOP: walk up to the door and it opens -->
+<div id="shopScreen" class="cover hide">
+  <div class="panel">
+    <h2 class="logTitle">🏪 THE SHOP</h2>
+    <p class="sub" style="margin:0 0 12px;">You have <span class="price" id="shopCoins">$0.00</span></p>
+    <div id="shelves"></div>
+    <div class="log" id="shopLog" style="min-height:38px;"></div>
+    <button class="primary" id="shopClose">Leave the shop</button>
+  </div>
+</div>
+
+<!-- THE HYPERCAR: drive straight to any region -->
+<div id="carScreen" class="cover hide">
+  <div class="panel">
+    <h2 class="logTitle">🏎️ HYPERCAR</h2>
+    <p class="sub" style="margin:0 0 10px;">Drive straight to any region.</p>
+    <div id="travelRow"></div>
+    <button class="ghost" id="carClose" style="width:100%;">Back</button>
+  </div>
+</div>
 
 <!-- OCTO LOG: what you have caught, and the slots still empty -->
 <div id="logScreen" class="cover hide">
@@ -221,28 +257,36 @@ const $ = id => document.getElementById(id);
 // LOG_SLOTS is 8: the roster below fills 7, and the last slot is Asher's to design.
 // hp / base / weight / move come from the 2D build's DEX; tiles are the encounter tiles below.
 const POOL = [
-  { id:'grasslet', name:'Grasslet',        sprite:'🐛', biome:'Grasslands',        rarity:'2/10',
+  { id:'grasslet', pay:2, name:'Grasslet',        sprite:'🐛', biome:'Grasslands',        rarity:'2/10',
     tiles:['H'],          weight:38, hp:16, base:0.34 },
-  { id:'pirate',   name:'St. Pirate',      sprite:'🏴‍☠️', biome:'Fighting + Water',  rarity:'5/10',
+  { id:'pirate', pay:5,   name:'St. Pirate',      sprite:'🏴‍☠️', biome:'Fighting + Water',  rarity:'5/10',
     tiles:['S'],          weight:20, hp:26, base:0.24, move:'hook' },
-  { id:'taco',     name:'Tacoman',         sprite:'🌮', biome:'2 biomes',          rarity:'10/10',
+  { id:'taco', pay:9,     name:'Tacoman',         sprite:'🌮', biome:'2 biomes',          rarity:'10/10',
     tiles:['H','S'],      weight:7,  hp:30, base:0.16, move:'taco' },
-  { id:'crab',     name:'Mr. Crab Pants',  sprite:'🦀', biome:'Beach + Builder',   rarity:'10/10',
+  { id:'crab', pay:10,     name:'Mr. Crab Pants',  sprite:'🦀', biome:'Beach + Builder',   rarity:'10/10',
     tiles:['S'],          weight:6,  hp:32, base:0.15, move:'wall' },
-  { id:'mech',     name:'Mech',            sprite:'🤖', biome:'Blocky',            rarity:'10/10',
+  { id:'mech', pay:10,     name:'Mech',            sprite:'🤖', biome:'Blocky',            rarity:'10/10',
     tiles:['B'],          weight:22, hp:34, base:0.14, move:'blast' },
-  { id:'flyer',    name:'Mr. Flyer',       sprite:'🦅', biome:'Unknown — anywhere', rarity:'12/10',
+  { id:'flyer', pay:14,    name:'Mr. Flyer',       sprite:'🦅', biome:'Unknown — anywhere', rarity:'12/10',
     tiles:['H','S','B','F'], weight:2, hp:34, base:0.10, move:'bomb' },
-  { id:'rage',     name:'Rage Monster',    sprite:'🤼', biome:'Forest',            rarity:'RAREST',
+  { id:'rage', pay:20,     name:'Rage Monster',    sprite:'🤼', biome:'Forest',            rarity:'RAREST',
     tiles:['F'],          weight:4,  hp:40, base:0.08, move:'wrestle', lastOne:true },
 ];
 const LOG_SLOTS = 8;
+// What the shop sells, at the 2D build's prices. The Hypercar's $25.60 is Asher's number.
+const SHOP_STOCK = [
+  { id:'ball', icon:'🟣', name:'Octeo ball', desc:'One more chance at a catch.',        cost:2.00 },
+  { id:'sand', icon:'🟨', name:'Sandstone',  desc:"Toward Mr. Crab Pants' evolution.",  cost:5.00 },
+  { id:'car',  icon:'🏎️', name:'Hypercar',   desc:'Drive straight to any region. Buy once.', cost:25.60 },
+];
+const SAND_TO_EVOLVE = 8;   // eight, because Octomon
 // Every region: the encounter tile its Octomon hide in, and the name shown on screen.
+// at: where the Hypercar drops you, on open ground well inside the region.
 const REGIONS = {
-  forest: { name:'THE DEEP FOREST',   hide:'F' },
-  grass:  { name:'THE GRASSLANDS',    hide:'H' },
-  beach:  { name:'THE BEACH',         hide:'S' },
-  blocky: { name:'THE BLOCKY LANDS',  hide:'B' },
+  forest: { name:'THE DEEP FOREST',   hide:'F', icon:'🌳', at:[8, 10] },
+  grass:  { name:'THE GRASSLANDS',    hide:'H', icon:'🌿', at:[26, 10] },
+  beach:  { name:'THE BEACH',         hide:'S', icon:'🏖️', at:[10, 26] },
+  blocky: { name:'THE BLOCKY LANDS',  hide:'B', icon:'🧱', at:[26, 26] },
   cross:  { name:'THE CROSSROADS',    hide:null },
 };
 const SKINS = ['🧍','🤠','🥷','🧙','🦸','🧑‍🚀','🧑‍🌾','🧝','🧑‍🎤','🕵️']; // the 2D build's skins
@@ -559,10 +603,14 @@ function projectedDistance(obj, x, y) {
 // Only what was caught is saved — the world rebuilds itself from the seed, and balls refill.
 const SAVE_KEY = 'octomon-3d-save-v1';
 let caught = new Set();
+let coins = 0, sand = 0, hasCar = false, evolved = false;
+const money = n => '$' + n.toFixed(2);
 
 function saveGame() {
   try {
-    localStorage.setItem(SAVE_KEY, JSON.stringify({ v: 1, caught: [...caught], skin }));
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      v: 2, caught: [...caught], skin, coins, sand, car: hasCar, evolved,
+    }));
   } catch (e) { /* private window, or storage full: the game still plays, it just forgets */ }
 }
 function loadGame() {
@@ -570,9 +618,24 @@ function loadGame() {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return;
     const d = JSON.parse(raw);
-    if (d && Array.isArray(d.caught)) caught = new Set(d.caught.filter(id => POOL.some(p => p.id === id)));
-    if (d && typeof d.skin === 'string' && SKINS.includes(d.skin)) skin = d.skin;
-  } catch (e) { caught = new Set(); }
+    if (!d) return;
+    // a v1 save has no money in it: those fields just start at zero
+    if (Array.isArray(d.caught)) caught = new Set(d.caught.filter(id => POOL.some(p => p.id === id)));
+    if (typeof d.skin === 'string' && SKINS.includes(d.skin)) skin = d.skin;
+    if (Number.isFinite(d.coins)) coins = Math.max(0, d.coins);
+    if (Number.isFinite(d.sand)) sand = Math.max(0, d.sand);
+    hasCar = !!d.car; evolved = !!d.evolved;
+  } catch (e) { caught = new Set(); coins = sand = 0; hasCar = evolved = false; }
+}
+// Mr. Crab Pants' special evolution: Asher's rule — eight Sandstone, and you must have caught him.
+function checkEvolve() {
+  if (evolved || sand < SAND_TO_EVOLVE || !caught.has('crab')) return false;
+  sand -= SAND_TO_EVOLVE; evolved = true;
+  const crab = POOL.find(d => d.id === 'crab');
+  crab.name = 'King Crab Pants'; crab.sprite = '👑';
+  saveGame(); hudMoney();
+  events.push({ type: 'evolve', id: 'crab' });
+  return true;
 }
 function logCount() { return caught.size; }
 function drawLog() {
@@ -599,6 +662,69 @@ function drawLog() {
     : `${logCount()} caught, ${left.length} still out there.`;
 }
 function hudLog() { $('hCaught').textContent = logCount(); }
+function hudMoney() {
+  $('hCoins').textContent = coins.toFixed(2);
+  $('hSand').textContent = sand;
+  $('carBtn').classList.toggle('hide', !hasCar || scene !== 'play');
+}
+
+// ---- The shop, and the Hypercar ------------------------------------------------------------
+function openShop() {
+  $('shopLog').innerHTML = ''; drawShop(); $('shopScreen').classList.remove('hide');
+  events.push({ type: 'shop', open: true });
+}
+function closeShop() { $('shopScreen').classList.add('hide'); shopCooldown = 2.2; }
+function drawShop() {
+  $('shopCoins').textContent = money(coins);
+  const box = $('shelves'); box.innerHTML = '';
+  SHOP_STOCK.forEach(it => {
+    const owned = it.id === 'car' && hasCar;
+    const row = document.createElement('div'); row.className = 'shelf';
+    row.innerHTML = `<div class="ic">${it.icon}</div><div class="txt"><b>${it.name}</b>${it.desc}<br><span class="price">${money(it.cost)}</span></div>`;
+    const b = document.createElement('button');
+    b.className = 'primary'; b.textContent = owned ? 'OWNED' : 'Buy';
+    b.disabled = owned || coins < it.cost;
+    b.onclick = () => buy(it);
+    row.appendChild(b); box.appendChild(row);
+  });
+}
+function buy(it) {
+  if (coins < it.cost || (it.id === 'car' && hasCar)) return;
+  coins -= it.cost;
+  if (it.id === 'ball') balls++;
+  if (it.id === 'sand') sand++;
+  if (it.id === 'car') hasCar = true;
+  const p = document.createElement('p'); p.className = 'hit';
+  p.textContent = it.id === 'car'
+    ? 'The Hypercar is yours! Drive to any region from the 🏎️ button.'
+    : 'Bought a ' + it.name + '.';
+  $('shopLog').appendChild(p);
+  if (it.id === 'sand' && checkEvolve()) {
+    const q = document.createElement('p'); q.className = 'hit';
+    q.textContent = SAND_TO_EVOLVE + ' Sandstone used — MR. CRAB PANTS EVOLVED into KING CRAB PANTS!';
+    $('shopLog').appendChild(q);
+  }
+  events.push({ type: 'buy', id: it.id, coins });
+  saveGame(); drawShop(); hud(); hudMoney();
+}
+function openCar() {
+  const box = $('travelRow'); box.innerHTML = '';
+  for (const [key, r] of Object.entries(REGIONS)) {
+    if (!r.at) continue;
+    const b = document.createElement('button');
+    b.className = 'primary'; b.style.width = '100%'; b.style.marginBottom = '6px';
+    b.textContent = r.icon + '  ' + r.name;
+    b.onclick = () => {
+      P.x = P.px = wx(r.at[0]); P.z = P.pz = wx(r.at[1]); P.speed = 0;
+      if (creature) removeCreature();
+      placeCamera(true); showRegion(); closeCar();
+      events.push({ type: 'drive', to: key });
+    };
+    box.appendChild(b);
+  }
+  $('carScreen').classList.remove('hide');
+}
+function closeCar() { $('carScreen').classList.add('hide'); }
 
 // ---- State -------------------------------------------------------------------------------
 let scene, state, creature = null, meeting = false, camYaw = 0;
@@ -658,6 +784,15 @@ function walk(dt) {
 }
 
 // ---- Tall grass: rustle, then an Octomon appears ----------------------------------------
+// Walk up to the shop door and it opens. The cooldown stops it reopening the moment you leave.
+const DOOR = { x: (wx(SHOP.x0) + wx(SHOP.x1)) / 2 - 1.2, z: (wx(SHOP.z0) + wx(SHOP.z1)) / 2 + 2.3 };
+let shopCooldown = 0;
+function shopDoor(dt) {
+  if (shopCooldown > 0) { shopCooldown -= dt; return; }
+  if (meeting || !$('shopScreen').classList.contains('hide')) return;
+  if (Math.hypot(P.x - DOOR.x, P.z - DOOR.z) < 1.6) openShop();
+}
+
 function grass(moved) {
   const tx = tileOf(P.x), tz = tileOf(P.z), id = tz * N + tx;
   if (!HIDES.has(at(tx, tz))) { state.walked = 0; state.lastTile = id; return; }
@@ -849,9 +984,17 @@ async function throwBall() {
 }
 async function capture() {
   const first = !caught.has(foe.id);
-  caught.add(foe.id); saveGame(); hudLog();
+  caught.add(foe.id);
   say('Caught! You caught the ' + foe.name + '.', true);
   if (first) say(foe.name + ' joins your Octo Log. (' + logCount() + '/' + LOG_SLOTS + ')');
+  coins += foe.pay || 0;
+  say('You earn ' + money(foe.pay || 0) + '.');
+  if (rng() < 0.5) {   // Asher's rule: a catch has a 50/50 chance of dropping a Sandstone
+    sand++;
+    say('It dropped a Sandstone! (' + sand + '/' + SAND_TO_EVOLVE + ')');
+  }
+  if (checkEvolve()) say(SAND_TO_EVOLVE + ' Sandstone used — MR. CRAB PANTS EVOLVED into KING CRAB PANTS!', true);
+  saveGame(); hudLog(); hudMoney();
   events.push({ type: 'caught', id: foe.id, total: logCount() });
   const done = POOL.every(d => caught.has(d.id));
   if (done) say('Every Octomon caught. You are the OCTO CHAMPION!', true);
@@ -929,6 +1072,9 @@ function openLog() { drawLog(); $('logScreen').classList.remove('hide'); }
 function closeLog() { $('logScreen').classList.add('hide'); }
 $('logBtn').addEventListener('click', openLog);
 $('logClose').addEventListener('click', closeLog);
+$('shopClose').addEventListener('click', closeShop);
+$('carBtn').addEventListener('click', openCar);
+$('carClose').addEventListener('click', closeCar);
 
 function toast(html) { const el = $('toast'); if (!html) { el.classList.add('hide'); return; } el.innerHTML = html; el.classList.remove('hide'); }
 
@@ -970,6 +1116,7 @@ const scenes = {
       else { P.px = P.x; P.pz = P.z; P.speed = 0; look.dx = 0; }
       if (popping) faceSpot(dt, state.pending || creature);
       showRegion();
+      if (!meeting && !popping) shopDoor(dt);
       if (!meeting && creature && creature.popT >= 1 && (pressed('Enter') || pressed('Space'))) meet(); // laptop testing
       updateCreature(dt);
       placeCamera(false, dt);
@@ -984,7 +1131,7 @@ function startPlay() {
   reset(); scene = 'play';
   $('title').classList.add('hide');
   ['region', 'hint', 'balls', 'logBtn'].forEach(id => $(id).classList.remove('hide'));
-  hudLog(); showRegion();
+  hudLog(); hudMoney(); showRegion();
   events.push({ type: 'scene', name: 'play' });
 }
 function showTitle() {
@@ -1041,6 +1188,9 @@ function frame() { tick(); requestAnimationFrame(frame); }
 function timer() { if (document.visibilityState === 'visible' && clock.now() - last > 0.1) tick(); }
 
 // ---- What a check can read and drive (?manual=1 stops the loop; players never see it) ----
+window.__door = () => ({ x: DOOR.x, z: DOOR.z, cooldown: shopCooldown });
+window.__wallet = () => ({ coins, sand, car: hasCar, evolved, balls });
+window.__give = (c, sd) => { coins += c; sand += sd || 0; saveGame(); hudMoney(); if (!$("shopScreen").classList.contains("hide")) drawShop(); };
 window.__roll = cell => roll(cell);                                  // a check inspects the spawn table
 window.__catchAll = () => { POOL.filter(d => !d.lastOne).forEach(d => caught.add(d.id)); saveGame(); hudLog(); };
 window.__yaw = y => { camYaw = y; placeCamera(true); };   // a check aims the camera
@@ -1074,6 +1224,7 @@ window.game = {
 
 // ---- Boot ----------------------------------------------------------------------------------
 if (params.get('fresh') !== '1') loadGame();   // ?fresh=1 starts a clean game, for checking
+if (evolved) { const c = POOL.find(d => d.id === 'crab'); c.name = 'King Crab Pants'; c.sprite = '👑'; }
 seed = Number(params.get('seed')) || CONFIG.seed;
 makeMap(); buildWorld();
 playerSprite = emojiSprite(skin, tune.playerSize); playerShadow = blobShadow();
