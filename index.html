@@ -163,6 +163,19 @@
   .shelf button{margin:0; font-size:12px; padding:9px 12px; width:auto; flex:0 0 auto; min-width:84px;}
   .price{color:#f2d24b; font-family:var(--display); font-size:12px;}
   #shopLog:empty{display:none;}   /* no empty bar before you have bought anything */
+
+  /* trading */
+  #tradeBody{display:flex; gap:10px; margin-top:10px; align-items:flex-start;}
+  /* each side needs its own visible box, or the two sets of cards read as one pile */
+  .tradeCol{flex:1; min-width:0; background:rgba(16,23,40,.5); border:2px solid var(--edge);
+    border-radius:10px; padding:8px 7px;}
+  .tradeHead{font-family:var(--display); font-size:11px; color:var(--amber); text-align:center; margin:0 0 7px;}
+  .tradeCards{grid-template-columns:repeat(2,1fr); gap:6px;}
+  .tradeCards .card{cursor:pointer; padding:6px 3px;}
+  .tradeCards .card.pick{border-color:var(--amber); background:#2a2415;}
+  .tradeCards .card .s{font-size:22px;}
+  #tradeNote{margin:10px 0 0; min-height:17px;}
+  @media (max-width:420px){ .tradeCards{grid-template-columns:repeat(1,1fr);} }
 </style>
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
 </head>
@@ -187,12 +200,35 @@
     <p class="sub" id="skinLine" style="margin:14px 0 8px;">Pick your skin</p>
     <div class="skins" id="skins"></div>
     <button class="primary" id="go">Start exploring</button>
+    <button class="ghost hide" id="tradeBtn" style="width:100%;">🔄 Trade Octomon</button>
   </div>
 </div>
 
 <div id="balls" class="hide">🟣 <b id="hBalls">10</b> &nbsp; 🟨 <b id="hSand">0</b> &nbsp; 💰 <b id="hCoins">0.00</b></div>
 <button id="logBtn" class="hide">📕 <b id="hCaught">0</b>/8</button>
 <button id="carBtn" class="hide">🏎️</button>
+
+<!-- TRADING: two players on the same iPad swap one Octomon each -->
+<div id="tradeScreen" class="cover hide">
+  <div class="panel">
+    <h2 class="logTitle">🔄 TRADE</h2>
+    <p class="sub" style="margin:0 0 10px;" id="tradeWith">Trade with</p>
+    <div class="who" id="tradePartners"></div>
+    <div id="tradeBody">
+      <div class="tradeCol">
+        <p class="tradeHead" id="tradeMineHead">You give</p>
+        <div class="cards tradeCards" id="tradeMine"></div>
+      </div>
+      <div class="tradeCol">
+        <p class="tradeHead" id="tradeTheirsHead">You get</p>
+        <div class="cards tradeCards" id="tradeTheirs"></div>
+      </div>
+    </div>
+    <p class="sub" id="tradeNote"></p>
+    <button class="primary" id="tradeGo" disabled>Make the trade</button>
+    <button class="ghost" id="tradeClose" style="width:100%;">Back</button>
+  </div>
+</div>
 
 <!-- THE SHOP: walk up to the door and it opens -->
 <div id="shopScreen" class="cover hide">
@@ -1146,6 +1182,9 @@ $('logBtn').addEventListener('click', openLog);
 $('logClose').addEventListener('click', closeLog);
 $('shopClose').addEventListener('click', closeShop);
 $('addGo').addEventListener('click', addPlayer);
+$('tradeBtn').addEventListener('click', openTrade);
+$('tradeClose').addEventListener('click', closeTrade);
+$('tradeGo').addEventListener('click', doTrade);
 $('newName').addEventListener('keydown', e => { if (e.key === 'Enter') addPlayer(); });
 $('carBtn').addEventListener('click', openCar);
 $('carClose').addEventListener('click', closeCar);
@@ -1246,8 +1285,89 @@ function showTitle() {
     ? 'Pick your skin — every skin unlocked'
     : `Pick your skin — ${SKINS.length - nextLock} more unlock as you catch Octomon`;
 
+  $('tradeBtn').classList.toggle('hide', players.length < 2);
   $('title').classList.remove('hide');
 }
+// ---- Trading ---------------------------------------------------------------------------
+// Two children, one iPad. A trade is a swap: each side gives one Octomon the other does not
+// have, so both logs gain something new and neither count goes down. That rule is what stops
+// a trade ending in tears — you cannot give away your only Mech for one you already own.
+let tradePartner = -1, tradeMine = null, tradeTheirs = null;
+
+function openTrade() {
+  if (players.length < 2) return;
+  saveGame();
+  tradePartner = players.findIndex((_, i) => i !== current);
+  tradeMine = tradeTheirs = null;
+  $('title').classList.add('hide');
+  $('tradeScreen').classList.remove('hide');
+  drawTrade();
+}
+function closeTrade() { $('tradeScreen').classList.add('hide'); showTitle(); }
+
+function drawTrade() {
+  const me = players[current], them = players[tradePartner];
+  $('tradeWith').textContent = me.name + ' trades with';
+
+  const row = $('tradePartners'); row.innerHTML = '';
+  players.forEach((p, i) => {
+    if (i === current) return;
+    const b = document.createElement('button');
+    if (i === tradePartner) b.className = 'on';
+    b.innerHTML = `<span class="f">${p.skin}</span>${p.name}`;
+    b.onclick = () => { tradePartner = i; tradeMine = tradeTheirs = null; drawTrade(); };
+    row.appendChild(b);
+  });
+
+  const mineSet = new Set(me.caught || []), theirsSet = new Set(them.caught || []);
+  const iCanOffer = POOL.filter(d => mineSet.has(d.id) && !theirsSet.has(d.id));
+  const theyCanOffer = POOL.filter(d => theirsSet.has(d.id) && !mineSet.has(d.id));
+
+  $('tradeMineHead').textContent = me.name + ' gives';
+  $('tradeTheirsHead').textContent = them.name + ' gives';
+  fillTradeCards($('tradeMine'), iCanOffer, 'mine');
+  fillTradeCards($('tradeTheirs'), theyCanOffer, 'theirs');
+
+  const ready = tradeMine && tradeTheirs;
+  $('tradeGo').disabled = !ready;
+  $('tradeNote').textContent =
+    !iCanOffer.length ? `${me.name} has nothing ${them.name} is missing yet.`
+    : !theyCanOffer.length ? `${them.name} has nothing ${me.name} is missing yet.`
+    : ready ? `Swap ${POOL.find(d => d.id === tradeMine).name} for ${POOL.find(d => d.id === tradeTheirs).name}?`
+    : 'Pick one from each side.';
+}
+function fillTradeCards(box, list, side) {
+  box.innerHTML = '';
+  if (!list.length) {
+    const el = document.createElement('div');
+    el.className = 'card empty';
+    el.innerHTML = '<div class="s">—</div><div class="n">NOTHING<br>TO GIVE</div>';
+    box.appendChild(el); return;
+  }
+  const picked = side === 'mine' ? tradeMine : tradeTheirs;
+  list.forEach(d => {
+    const el = document.createElement('div');
+    el.className = 'card' + (picked === d.id ? ' pick' : '');
+    el.innerHTML = `<div class="s">${d.sprite}</div><div class="n">${d.name}</div><div class="r">${d.rarity}</div>`;
+    el.onclick = () => { if (side === 'mine') tradeMine = d.id; else tradeTheirs = d.id; drawTrade(); };
+    box.appendChild(el);
+  });
+}
+function doTrade() {
+  if (!tradeMine || !tradeTheirs) return;
+  const me = players[current], them = players[tradePartner];
+  const mineName = POOL.find(d => d.id === tradeMine).name;
+  const theirName = POOL.find(d => d.id === tradeTheirs).name;
+  me.caught = (me.caught || []).filter(id => id !== tradeMine).concat(tradeTheirs);
+  them.caught = (them.caught || []).filter(id => id !== tradeTheirs).concat(tradeMine);
+  unpackPlayer(current);             // the live game picks up my side of the swap
+  saveGame(); hudLog();
+  events.push({ type: 'trade', gave: tradeMine, got: tradeTheirs, with: them.name });
+  tradeMine = tradeTheirs = null;
+  drawTrade();
+  $('tradeNote').textContent = `Traded! ${me.name} gave ${mineName} and got ${theirName}.`;
+}
+
 function addPlayer() {
   const el = $('newName');
   const name = el.value.trim().slice(0, 12);
