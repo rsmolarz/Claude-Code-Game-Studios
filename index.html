@@ -146,6 +146,9 @@
   @media (max-width:480px){ .cards{grid-template-columns:repeat(3,1fr);} }
   .card{background:var(--ink); border:2px solid #3b4a7a; border-radius:10px; padding:8px 4px; text-align:center;}
   .card.empty{opacity:.45; border-style:dashed;}
+  .card.away{border-color:#4a3f6b; background:#141027;}
+  /* met but not caught: show its shape, not its face */
+  .card .s.shadow{filter:brightness(0) saturate(0) opacity(.55); }
   .card .s{font-size:26px; line-height:1.1;}
   .card .n{font-family:var(--display); font-size:10px; margin-top:4px; word-break:break-word;}
   .card .r{font-size:9px; color:var(--muted);}
@@ -677,21 +680,31 @@ const MAX_PLAYERS = 6;
 let players = [];        // [{ name, skin, caught:[], coins, sand, car, evolved, balls }]
 let current = 0;         // whose game is loaded
 let caught = new Set();
+let levels = {};        // id -> level. Catching one you already have levels it up.
+let missed = new Set(); // the ones that got away: seen, escaped, not yet caught.
 let coins = 0, sand = 0, hasCar = false, evolved = false;
 const money = n => '$' + n.toFixed(2);
 const blankPlayer = (name, sk) => ({
-  name, skin: sk || SKINS[0], caught: [], coins: 0, sand: 0, car: false, evolved: false, balls: CONFIG.balls,
+  name, skin: sk || SKINS[0], caught: [], levels: {}, missed: [],
+  coins: 0, sand: 0, car: false, evolved: false, balls: CONFIG.balls,
 });
 
 function packPlayer() {   // the game in play, written back into the roster
   const p = players[current]; if (!p) return;
   p.skin = skin; p.caught = [...caught]; p.coins = coins;
+  p.levels = { ...levels }; p.missed = [...missed];
   p.sand = sand; p.car = hasCar; p.evolved = evolved; p.balls = balls;
 }
 function unpackPlayer(i) {   // and a roster entry loaded into the game
   current = Math.max(0, Math.min(i, players.length - 1));
   const p = players[current];
   caught = new Set((p.caught || []).filter(id => POOL.some(d => d.id === id)));
+  levels = {};
+  for (const [id, n] of Object.entries(p.levels || {})) {
+    if (POOL.some(d => d.id === id) && Number.isFinite(n)) levels[id] = Math.max(1, Math.floor(n));
+  }
+  caught.forEach(id => { if (!levels[id]) levels[id] = 1; });   // a save from before levels existed
+  missed = new Set((p.missed || []).filter(id => POOL.some(d => d.id === id) && !caught.has(id)));
   coins = Math.max(0, p.coins || 0); sand = Math.max(0, p.sand || 0);
   hasCar = !!p.car; evolved = !!p.evolved;
   balls = Number.isFinite(p.balls) ? p.balls : CONFIG.balls;
@@ -746,10 +759,15 @@ function drawLog() {
   const box = $('cards'); box.innerHTML = '';
   POOL.forEach(d => {
     const got = caught.has(d.id);
+    const gotAway = !got && missed.has(d.id);
     const el = document.createElement('div');
-    el.className = 'card' + (got ? '' : ' empty');
+    el.className = 'card' + (got ? '' : gotAway ? ' away' : ' empty');
     el.innerHTML = got
-      ? `<div class="s">${d.sprite}</div><div class="n">${d.name}</div><div class="r">${d.rarity}</div>`
+      // caught: its level, which goes up every time you catch that one again
+      ? `<div class="s">${d.sprite}</div><div class="n">${d.name}</div><div class="r">Lv.${levels[d.id] || 1} · ${d.rarity}</div>`
+      // met but never caught: a silhouette, so you know what is still out there
+      : gotAway
+      ? `<div class="s shadow">${d.sprite}</div><div class="n">${d.name}</div><div class="r">got away</div>`
       : `<div class="s">❓</div><div class="n">???</div><div class="r">not caught</div>`;
     box.appendChild(el);
   });
@@ -760,10 +778,11 @@ function drawLog() {
     box.appendChild(el);
   }
   const left = POOL.filter(d => !caught.has(d.id));
+  const away = left.filter(d => missed.has(d.id)).length;
   $('logNote').textContent =
     left.length === 0 ? 'Every Octomon caught. Octo Champion.'
     : (left.length === 1 && left[0].lastOne) ? 'Only the Rage Monster left. He is in the Deep Forest.'
-    : `${logCount()} caught, ${left.length} still out there.`;
+    : `${logCount()} caught, ${left.length} still out there` + (away ? ` — ${away} got away.` : '.');
 }
 function hudLog() { $('hCaught').textContent = logCount(); }
 function hudMoney() {
@@ -1093,8 +1112,11 @@ async function throwBall() {
 async function capture() {
   const first = !caught.has(foe.id);
   caught.add(foe.id);
+  missed.delete(foe.id);                      // caught at last: it is no longer one that got away
+  levels[foe.id] = (levels[foe.id] || 0) + 1; // every catch of the same one levels it up
   say('Caught! You caught the ' + foe.name + '.', true);
   if (first) say(foe.name + ' joins your Octo Log. (' + logCount() + '/' + LOG_SLOTS + ')');
+  else say(foe.name + ' levels up! Now Lv.' + levels[foe.id] + '.', true);
   coins += foe.pay || 0;
   say('You earn ' + money(foe.pay || 0) + '.');
   if (rng() < 0.5) {   // Asher's rule: a catch has a 50/50 chance of dropping a Sandstone
@@ -1137,6 +1159,7 @@ async function foeTurn() {
     events.push({ type: 'move', move: 'blast' });
     await sleep(1300);
     busy = false;
+    if (!caught.has(foe.id)) { missed.add(foe.id); saveGame(); }
     endMeet('blasted');
     P.x = P.px = wx(START.x); P.z = P.pz = wx(START.z); P.speed = 0;
     placeCamera(true);
@@ -1154,6 +1177,7 @@ async function foeTurn() {
 
   if (turns >= tune.escapeTurns) {
     say('The ' + foe.name + ' escapes into the wild.');
+    if (!caught.has(foe.id)) { missed.add(foe.id); saveGame(); }
     $('fSprite').classList.add('gone');
     await sleep(800); busy = false; return endMeet('escaped');
   }
@@ -1161,6 +1185,7 @@ async function foeTurn() {
 }
 async function flee() {
   if (busy) return; busy = true;
+  if (foe && !caught.has(foe.id)) { missed.add(foe.id); saveGame(); }
   say('You back away slowly.');
   await sleep(420); busy = false; endMeet('ran');
 }
@@ -1358,6 +1383,14 @@ function doTrade() {
   const me = players[current], them = players[tradePartner];
   const mineName = POOL.find(d => d.id === tradeMine).name;
   const theirName = POOL.find(d => d.id === tradeTheirs).name;
+  // the Octomon goes across at the level it was raised to, and leaves the giver's log entirely
+  me.levels = me.levels || {}; them.levels = them.levels || {};
+  const myLevel = me.levels[tradeMine] || 1, theirLevel = them.levels[tradeTheirs] || 1;
+  delete me.levels[tradeMine];   me.levels[tradeTheirs] = theirLevel;
+  delete them.levels[tradeTheirs]; them.levels[tradeMine] = myLevel;
+  // and a traded-away one is not "got away": you had it, you chose to hand it over
+  me.missed = (me.missed || []).filter(id => id !== tradeTheirs);
+  them.missed = (them.missed || []).filter(id => id !== tradeMine);
   me.caught = (me.caught || []).filter(id => id !== tradeMine).concat(tradeTheirs);
   them.caught = (them.caught || []).filter(id => id !== tradeTheirs).concat(tradeMine);
   unpackPlayer(current);             // the live game picks up my side of the swap
@@ -1424,6 +1457,7 @@ function timer() { if (document.visibilityState === 'visible' && clock.now() - l
 // ---- What a check can read and drive (?manual=1 stops the loop; players never see it) ----
 window.__door = () => ({ x: DOOR.x, z: DOOR.z, cooldown: shopCooldown });
 window.__wallet = () => ({ coins, sand, car: hasCar, evolved, balls });
+window.__levels = () => ({ levels: { ...levels }, missed: [...missed] });
 window.__players = () => ({ list: players.map(p => ({ n: p.name, s: p.skin, c: (p.caught||[]).length, coins: p.coins })), current });
 window.__give = (c, sd) => { coins += c; sand += sd || 0; saveGame(); hudMoney(); if (!$("shopScreen").classList.contains("hide")) drawShop(); };
 window.__roll = cell => roll(cell);                                  // a check inspects the spawn table
