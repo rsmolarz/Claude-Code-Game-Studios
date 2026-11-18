@@ -179,6 +179,21 @@
   .tradeCards .card .s{font-size:22px;}
   #tradeNote{margin:10px 0 0; min-height:17px;}
   @media (max-width:420px){ .tradeCards{grid-template-columns:repeat(1,1fr);} }
+
+  /* your Octomon in a battle */
+  button.send{background:var(--water); border-bottom-color:#1f4a80;}
+  .mine{display:flex; align-items:center; gap:9px; background:var(--ink); border:2px solid #3b4a7a;
+    border-radius:10px; padding:7px 10px; margin-top:8px;}
+  .mine .ms{font-size:26px; line-height:1;}
+  .mine .mInfo{flex:1; min-width:0;}
+  .mine .mName{font-family:var(--display); font-size:11px; color:var(--bone); margin-bottom:3px;}
+  .mine .mHp{font-family:var(--display); font-size:11px; color:var(--muted);}
+  .mBar{height:9px; margin:0; border-width:1px;}
+  .mBar span{background:linear-gradient(90deg,#3f7d3a,#6fc75f);}
+  .mine.fainted{opacity:.45;}
+  .mine.hurt{animation:hurt .3s;}
+  .teamPick{margin-top:8px; background:rgba(16,23,40,.5); border:2px solid var(--edge);
+    border-radius:10px; padding:8px 7px;}
 </style>
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
 </head>
@@ -282,10 +297,30 @@
       <span id="fHp">HP 16/16</span><span id="fOdds">Catch 34%</span>
     </div>
     <div class="wall" id="fWall"></div>
+
+    <!-- your Octomon, once you send one out -->
+    <div id="mine" class="mine hide">
+      <span class="ms" id="mSprite">🐛</span>
+      <div class="mInfo">
+        <div class="mName" id="mName">—</div>
+        <div class="bar mBar"><span id="mBar" style="width:100%"></span></div>
+      </div>
+      <span class="mHp" id="mHp">10/10</span>
+    </div>
+
     <div class="log" id="log"></div>
-    <div style="display:flex;flex-wrap:wrap;">
+
+    <!-- picking which of your Octomon goes out -->
+    <div id="teamPick" class="teamPick hide">
+      <p class="tradeHead">Send out which Octomon?</p>
+      <div class="cards tradeCards" id="teamCards"></div>
+      <button class="ghost" id="teamCancel" style="width:100%;margin-top:6px;">Never mind</button>
+    </div>
+
+    <div id="fightBtns" style="display:flex;flex-wrap:wrap;">
       <button id="bWeak">Weaken</button>
       <button class="ball" id="bBall">Throw Octeo ball</button>
+      <button id="bSend" class="send">Send out ▸</button>
       <button class="ghost" id="bRun">Run</button>
     </div>
   </div>
@@ -1011,6 +1046,7 @@ function encounter(sp) {
   const base = sp.id === 'grasslet' ? tune.grassletBase : sp.base;
   foe = { ...sp, maxHp: hp, hp, base, usedMove: false, wall: false, rebuilt: false };
   turns = 0; busy = false; skipThrow = false;
+  mine = null; spent = new Set(); $('mine').classList.add('hide'); hideTeam();
   const el = $('fSprite'); el.className = 'sprite'; el.textContent = foe.sprite;
   $('fName').textContent = 'Wild ' + foe.name;
   $('fTag').textContent = foe.biome + ' · ' + foe.rarity;
@@ -1029,8 +1065,13 @@ function refresh() {
   hud();
 }
 function lock(on) {
-  ['bWeak', 'bBall', 'bRun'].forEach(id => $(id).disabled = on);
-  if (!on) $('bBall').disabled = balls <= 0 || skipThrow;
+  ['bWeak', 'bBall', 'bRun', 'bSend'].forEach(id => $(id).disabled = on);
+  if (on) return;
+  $('bBall').disabled = balls <= 0 || skipThrow;
+  // with one of yours out, the first button is its attack; otherwise you weaken by hand
+  $('bWeak').textContent = mine ? 'Attack' : 'Weaken';
+  const canSend = POOL.some(d => caught.has(d.id) && !spent.has(d.id));
+  $('bSend').classList.toggle('hide', !!mine || !canSend);
 }
 function say(t, big) {
   const l = $('log'), p = document.createElement('p');
@@ -1046,6 +1087,80 @@ function hurtFX(n) {
   $('arena').appendChild(d);
   setTimeout(() => d.remove(), 1000);
 }
+// ---- Battles -----------------------------------------------------------------------------
+// Send out one of your own Octomon instead of weakening the wild one by hand. Yours hits
+// harder than you do and the wild one hits back, so a higher level is worth having. Nothing
+// is lost when yours faints — it just stops fighting, and you are back to weakening by hand.
+let mine = null;              // { id, name, sprite, lv, hp, maxHp, atk }
+let spent = new Set();        // worn out in THIS encounter: it cannot be sent straight back in
+const statsFor = (id) => {
+  const lv = levels[id] || 1, d = POOL.find(x => x.id === id);
+  return { id, name: d.name, sprite: d.sprite, lv,
+           maxHp: 10 + lv * 5, hp: 10 + lv * 5, atk: 3 + lv * 2 };
+};
+function showTeam() {
+  const list = POOL.filter(d => caught.has(d.id) && !spent.has(d.id));
+  if (!list.length) { say('None of your Octomon can fight right now.'); return; }
+  const box = $('teamCards'); box.innerHTML = '';
+  list.forEach(d => {
+    const st = statsFor(d.id);
+    const el = document.createElement('div');
+    el.className = 'card';
+    el.innerHTML = `<div class="s">${d.sprite}</div><div class="n">${d.name}</div><div class="r">Lv.${st.lv} · ${st.maxHp} HP</div>`;
+    el.onclick = () => sendOut(d.id);
+    box.appendChild(el);
+  });
+  $('teamPick').classList.remove('hide');
+  $('fightBtns').classList.add('hide');
+}
+function hideTeam() { $('teamPick').classList.add('hide'); $('fightBtns').classList.remove('hide'); }
+function sendOut(id) {
+  mine = statsFor(id);
+  hideTeam();
+  $('mine').classList.remove('hide', 'fainted');
+  $('mSprite').textContent = mine.sprite;
+  drawMine();
+  say('Go, ' + mine.name + '! (Lv.' + mine.lv + ')', true);
+  events.push({ type: 'sendout', id, lv: mine.lv });
+  refresh();
+}
+function drawMine() {
+  if (!mine) return;
+  $('mName').textContent = mine.name + '  Lv.' + mine.lv;
+  $('mBar').style.width = (mine.hp / mine.maxHp * 100) + '%';
+  $('mHp').textContent = mine.hp + '/' + mine.maxHp;
+}
+async function attack() {
+  if (busy || !mine || mine.hp <= 0) return;
+  busy = true; lock(true);
+  if (foe.wall) {                      // a wall is a wall, whoever is swinging at it
+    foe.wall = false; say(mine.name + ' smashes the sand wall down!'); quake();
+    if (foe.move === 'wall' && !foe.rebuilt && rng() < 0.5) { foe.rebuilt = true; foe.wall = true; say('He rebuilds it!'); }
+    refresh(); await sleep(400); return foeTurn();
+  }
+  const hit = mine.atk + Math.floor(rng() * 3);
+  foe.hp = Math.max(1, foe.hp - hit);
+  hurtFX(hit);
+  say(mine.name + ' attacks for ' + hit + '!');
+  events.push({ type: 'attack', by: mine.id, hit, hp: foe.hp });
+  refresh(); await sleep(420);
+  // and the wild one hits back
+  const back = 2 + Math.floor(rng() * 4);
+  mine.hp = Math.max(0, mine.hp - back);
+  const el = $('mine'); el.classList.remove('hurt'); void el.offsetWidth; el.classList.add('hurt');
+  say('The ' + foe.name + ' hits back for ' + back + '.');
+  drawMine();
+  if (mine.hp <= 0) {
+    el.classList.add('fainted');
+    spent.add(mine.id);     // worn out: no sending it straight back in at full health
+    const left = POOL.filter(d => caught.has(d.id) && !spent.has(d.id)).length;
+    say(mine.name + ' is worn out and comes back.' + (left ? ' Send out another, or weaken it yourself.' : ' Weaken it yourself now.'), true);
+    events.push({ type: 'fainted', id: mine.id });
+    mine = null;
+  }
+  await sleep(380); foeTurn();
+}
+
 async function weaken() {
   if (busy) return; busy = true; lock(true);
   // Sand Wall takes the hit instead: you have to knock it down before the Octomon feels anything
@@ -1189,7 +1304,9 @@ async function flee() {
   say('You back away slowly.');
   await sleep(420); busy = false; endMeet('ran');
 }
-$('bWeak').addEventListener('click', weaken);
+$('bWeak').addEventListener('click', () => (mine ? attack() : weaken()));
+$('bSend').addEventListener('click', showTeam);
+$('teamCancel').addEventListener('click', hideTeam);
 $('bBall').addEventListener('click', throwBall);
 $('bRun').addEventListener('click', flee);
 
@@ -1457,6 +1574,10 @@ function timer() { if (document.visibilityState === 'visible' && clock.now() - l
 // ---- What a check can read and drive (?manual=1 stops the loop; players never see it) ----
 window.__door = () => ({ x: DOOR.x, z: DOOR.z, cooldown: shopCooldown });
 window.__wallet = () => ({ coins, sand, car: hasCar, evolved, balls });
+window.__spent = () => [...spent];
+window.__battle = () => ({ mine: mine && { id: mine.id, lv: mine.lv, hp: mine.hp, maxHp: mine.maxHp, atk: mine.atk }, foeHp: foe && foe.hp });
+window.__sendOut = id => sendOut(id);
+window.__attack = () => attack();
 window.__levels = () => ({ levels: { ...levels }, missed: [...missed] });
 window.__players = () => ({ list: players.map(p => ({ n: p.name, s: p.skin, c: (p.caught||[]).length, coins: p.coins })), current });
 window.__give = (c, sd) => { coins += c; sand += sd || 0; saveGame(); hudMoney(); if (!$("shopScreen").classList.contains("hide")) drawShop(); };
