@@ -1,12 +1,18 @@
 <!doctype html>
 <!-- PROTOTYPE - NOT FOR PRODUCTION -->
 <!-- Question: Does a 3D walkable world feel better on a phone than the 2D grid? -->
-<!-- Date: 2026-11-14 -->
-<!-- Scope: step 1 (round 1 passed): one region (the Grasslands + crossroads), third-person
-     camera, phone touch controls, tall grass that rustles and an Octomon that appears.
+<!-- Date: 2026-11-18 -->
+<!-- Scope so far. Step 1 (round 1 passed): a walkable world, third-person camera, phone touch
+     controls, cover that rustles and an Octomon that appears.
      Step 2: tapping it opens the 2D build's encounter screen, ported (Weaken, Throw with the
-     three wobbles, Run, HP bar, catch odds, damage numbers), Grasslet only.
-     No shop, money, Sandstone, Octo Log or second region. The 2D game is prototypes/octomon/. -->
+     three wobbles, Run, HP bar, catch odds, damage numbers).
+     Step 3: all four regions — the Deep Forest, the Grasslands, the Beach and the Blocky Lands,
+     meeting at the crossroads — and the six Octomon Asher has designed, each in its own biome,
+     with its special move ported from the 2D build: Hook Whirl, Sand Wall, Taco Rain, Mech
+     Blast, Bomb Attack and the wrestling moves. Plus the Octo Log, saved to localStorage so a
+     catch survives closing the installed app. Rage Monster waits until the other six are caught.
+     Still to come: the shop, money, Sandstone and the Hypercar, and Asher's last Octomon.
+     The 2D game it is ported from is prototypes/octomon/. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -112,6 +118,21 @@
   .log p{margin:0 0 6px; animation:slidein .25s;} .log p:last-child{margin:0;}
   @keyframes slidein{from{opacity:0; transform:translateX(-8px);} to{opacity:1; transform:none;}}
   .log .hit{color:var(--amber);}
+  .wall{font-size:12px; color:#e3b775; margin-top:4px; min-height:15px;}
+
+  /* Octo Log */
+  #logBtn{position:fixed; top:calc(10px + env(safe-area-inset-top,0px)); right:10px; z-index:6;
+    font-family:var(--display); font-size:13px; padding:8px 11px; border-radius:9px;
+    background:var(--edge); color:var(--bone); border:none; border-bottom:3px solid #212a4a; cursor:pointer;}
+  #logBtn b{color:var(--amber);}
+  .logTitle{font-family:var(--display); font-size:19px; color:var(--amber); text-align:center; margin:0 0 12px;}
+  .cards{display:grid; grid-template-columns:repeat(4,1fr); gap:8px;}
+  @media (max-width:480px){ .cards{grid-template-columns:repeat(3,1fr);} }
+  .card{background:var(--ink); border:2px solid #3b4a7a; border-radius:10px; padding:8px 4px; text-align:center;}
+  .card.empty{opacity:.45; border-style:dashed;}
+  .card .s{font-size:26px; line-height:1.1;}
+  .card .n{font-family:var(--display); font-size:10px; margin-top:4px; word-break:break-word;}
+  .card .r{font-size:9px; color:var(--muted);}
 </style>
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
 </head>
@@ -134,6 +155,17 @@
 </div>
 
 <div id="balls" class="hide">🟣 <b id="hBalls">10</b></div>
+<button id="logBtn" class="hide">📕 <b id="hCaught">0</b>/8</button>
+
+<!-- OCTO LOG: what you have caught, and the slots still empty -->
+<div id="logScreen" class="cover hide">
+  <div class="panel">
+    <h2 class="logTitle">OCTO LOG</h2>
+    <div id="cards" class="cards"></div>
+    <p class="sub" id="logNote"></p>
+    <button class="primary" id="logClose">Back to the world</button>
+  </div>
+</div>
 
 <!-- ENCOUNTER: the 2D build's screen, ported -->
 <div id="fight" class="cover hide">
@@ -152,6 +184,7 @@
     <div style="display:flex;justify-content:space-between;font-size:12px;" class="muted">
       <span id="fHp">HP 16/16</span><span id="fOdds">Catch 34%</span>
     </div>
+    <div class="wall" id="fWall"></div>
     <div class="log" id="log"></div>
     <div style="display:flex;flex-wrap:wrap;">
       <button id="bWeak">Weaken</button>
@@ -182,12 +215,36 @@ function rng() { // mulberry32; every gameplay random call reads this, never Mat
 const events = []; // window.game.events: anything the game wants a run to see
 const $ = id => document.getElementById(id);
 
-// ---- Data: the Grasslands only ------------------------------------------------------------
-// One creature for the spike: Grasslet, the common Grasslands one (emoji placeholder, as in
-// the 2D build). The rest of the roster lives in the brief and the 2D build, not here.
+// ---- Data: the four regions and the roster ------------------------------------------------
+// Asher's six designed Octomon, each in its own biome, with the special moves ported from the
+// 2D build (prototypes/octomon/index.html). Grasslet is the common placeholder, as there.
+// LOG_SLOTS is 8: the roster below fills 7, and the last slot is Asher's to design.
+// hp / base / weight / move come from the 2D build's DEX; tiles are the encounter tiles below.
 const POOL = [
-  { id:'grasslet', name:'Grasslet',  sprite:'🐛', weight:1, biome:'Grasslands', rarity:'2/10' }, // HP and catch chance: config.js
+  { id:'grasslet', name:'Grasslet',        sprite:'🐛', biome:'Grasslands',        rarity:'2/10',
+    tiles:['H'],          weight:38, hp:16, base:0.34 },
+  { id:'pirate',   name:'St. Pirate',      sprite:'🏴‍☠️', biome:'Fighting + Water',  rarity:'5/10',
+    tiles:['S'],          weight:20, hp:26, base:0.24, move:'hook' },
+  { id:'taco',     name:'Tacoman',         sprite:'🌮', biome:'2 biomes',          rarity:'10/10',
+    tiles:['H','S'],      weight:7,  hp:30, base:0.16, move:'taco' },
+  { id:'crab',     name:'Mr. Crab Pants',  sprite:'🦀', biome:'Beach + Builder',   rarity:'10/10',
+    tiles:['S'],          weight:6,  hp:32, base:0.15, move:'wall' },
+  { id:'mech',     name:'Mech',            sprite:'🤖', biome:'Blocky',            rarity:'10/10',
+    tiles:['B'],          weight:22, hp:34, base:0.14, move:'blast' },
+  { id:'flyer',    name:'Mr. Flyer',       sprite:'🦅', biome:'Unknown — anywhere', rarity:'12/10',
+    tiles:['H','S','B','F'], weight:2, hp:34, base:0.10, move:'bomb' },
+  { id:'rage',     name:'Rage Monster',    sprite:'🤼', biome:'Forest',            rarity:'RAREST',
+    tiles:['F'],          weight:4,  hp:40, base:0.08, move:'wrestle', lastOne:true },
 ];
+const LOG_SLOTS = 8;
+// Every region: the encounter tile its Octomon hide in, and the name shown on screen.
+const REGIONS = {
+  forest: { name:'THE DEEP FOREST',   hide:'F' },
+  grass:  { name:'THE GRASSLANDS',    hide:'H' },
+  beach:  { name:'THE BEACH',         hide:'S' },
+  blocky: { name:'THE BLOCKY LANDS',  hide:'B' },
+  cross:  { name:'THE CROSSROADS',    hide:null },
+};
 const SKINS = ['🧍','🤠','🥷','🧙','🦸','🧑‍🚀','🧑‍🌾','🧝','🧑‍🎤','🕵️']; // the 2D build's skins
 let skin = SKINS[0];
 
@@ -212,7 +269,10 @@ const sun = new THREE.DirectionalLight(0xffffff, 1.7);
 sun.position.set(-12, 22, 8); scene3.add(sun);
 
 // ---- The world: a block map -------------------------------------------------------------
-// T tree (blocks) · g grass · H tall grass · p path · K shop (blocks, not enterable here)
+// Blocked: T tree · R rock · w water · K shop (not enterable here)
+// Walkable: p path · g grass · f forest floor · s sand · b blocky ground
+// Hiding places, one per region, where an Octomon can appear:
+//   H tall grass (Grasslands) · F undergrowth (Deep Forest) · S dune grass (Beach) · B rubble (Blocky Lands)
 const N = 36;
 let MAP = [];
 const wx = tx => tx - N / 2 + 0.5;          // tile -> world
@@ -220,21 +280,59 @@ const tileOf = v => Math.floor(v + N / 2);  // world -> tile
 const at = (tx, tz) => (tx < 0 || tz < 0 || tx >= N || tz >= N) ? 'T' : MAP[tz][tx];
 const SHOP = { x0:20, x1:23, z0:13, z1:16 };
 const START = { x: 18, z: 22 };              // on the path, just south of the crossroads
+const BLOCKED = new Set(['T', 'R', 'w', 'K']);
+const HIDES = new Set(['H', 'F', 'S', 'B']);
+
+// The four regions meet at the crossroads: forest north-west, grasslands north-east,
+// beach south-west, blocky lands south-east. Same arrangement as the 2D build's map.
+const onPathTile = (x, z) => x === 17 || x === 18 || z === 17 || z === 18;
+function regionOf(x, z) {
+  if (onPathTile(x, z)) return 'cross';
+  return z < 17 ? (x < 17 ? 'forest' : 'grass') : (x < 17 ? 'beach' : 'blocky');
+}
+const regionAtPlayer = () => regionOf(tileOf(P.x), tileOf(P.z));
 
 function makeMap() {
-  const patches = [ [9,9,5], [26,27,5], [10,26,4.6], [27,9,4.6], [23,22,2.6] ];
+  const GROUND = { forest:'f', grass:'g', beach:'s', blocky:'b', cross:'p' };
+  // Hiding patches: [x, z, radius], a few per region so each one has somewhere to search.
+  const patches = [
+    [8, 8, 4.4], [12, 4, 3.4], [4, 12, 3.4],        // Deep Forest
+    [26, 8, 4.6], [30, 13, 3.2], [23, 4, 3.4],      // Grasslands
+    [9, 27, 4.4], [4, 22, 3.2], [13, 31, 3.2],      // Beach
+    [26, 27, 4.4], [31, 22, 3.2], [22, 31, 3.2],    // Blocky Lands
+  ];
   MAP = [];
   for (let z = 0; z < N; z++) {
     const row = [];
     for (let x = 0; x < N; x++) {
       const edge = Math.min(x, z, N - 1 - x, N - 1 - z);
-      let c = 'g';
-      const onPath = x === 17 || x === 18 || z === 17 || z === 18;
-      for (const [cx, cz, r] of patches) if (Math.hypot(x - cx, z - cz) < r + rng() * 1.4) c = 'H';
-      if (onPath) c = 'p';
-      if (x >= SHOP.x0 && x <= SHOP.x1 && z >= SHOP.z0 && z <= SHOP.z1) c = 'K';
+      const reg = regionOf(x, z);
+      let c = GROUND[reg];
+
+      // the region's hiding places
+      if (reg !== 'cross') {
+        for (const [cx, cz, r] of patches) {
+          if (regionOf(cx, cz) !== reg) continue;
+          if (Math.hypot(x - cx, z - cz) < r + rng() * 1.4) c = REGIONS[reg].hide;
+        }
+      }
+
+      // what blocks the way, region by region
       const nearStart = Math.abs(x - START.x) < 3 && Math.abs(z - START.z) < 3;
-      if (c === 'g' && !nearStart && rng() < 0.03) c = 'T';
+      if (!nearStart && reg !== 'cross') {
+        if (reg === 'forest' && c === 'f' && rng() < 0.30) c = 'T';       // dense: you weave through it
+        if (reg === 'grass'  && c === 'g' && rng() < 0.03) c = 'T';       // open, the odd tree
+        if (reg === 'blocky' && c === 'b' && rng() < 0.10) c = 'R';       // boulders
+        if (reg === 'beach') {
+          // the sea fills the far south-west corner, with a sandy shore in front of it
+          const sea = (x + (N - 1 - z)) < 13 + rng() * 2;
+          if (sea) c = 'w';
+          else if (c === 's' && rng() < 0.03) c = 'R';
+        }
+      }
+
+      if (onPathTile(x, z)) c = 'p';
+      if (x >= SHOP.x0 && x <= SHOP.x1 && z >= SHOP.z0 && z <= SHOP.z1) c = 'K';
       if (edge < 2 || (edge === 2 && rng() < 0.45)) c = 'T';
       row.push(c);
     }
@@ -254,18 +352,41 @@ function jitter(hex, amt) { // hand-made: no two blocks quite the same colour
 }
 function buildWorld() {
   worldGroup = new THREE.Group(); scene3.add(worldGroup);
-  const GROUND = { g:'#3f7d3a', H:'#2f6a2d', p:'#7a6a4e', K:'#8d7a4e', T:'#244d24' };
+  const GROUND = {
+    g:'#3f7d3a', H:'#2f6a2d',            // Grasslands
+    f:'#1e4220', F:'#17351b', T:'#244d24', // Deep Forest
+    s:'#e3b775', S:'#cfa75f', w:'#2f6bb5', // Beach
+    b:'#7d6a55', B:'#6b5a47', R:'#5a6478', // Blocky Lands
+    p:'#7a6a4e', K:'#8d7a4e',             // the crossroads and the shop
+  };
 
-  // ground: one block per tile, top face at y = 0
+  // ground: one block per tile, top face at y = 0 (water and the path sit a little lower)
   const ground = new THREE.InstancedMesh(box, mat(), N * N);
   let i = 0;
   for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) {
-    const c = MAP[z][x], lift = c === 'p' ? -0.06 : 0;
+    const c = MAP[z][x], lift = c === 'p' ? -0.06 : c === 'w' ? -0.22 : 0;
     dummy.position.set(wx(x), -0.5 + lift, wx(z)); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1);
     dummy.updateMatrix(); ground.setMatrixAt(i, dummy.matrix);
-    ground.setColorAt(i, jitter(GROUND[c], 0.14)); i++;
+    ground.setColorAt(i, jitter(GROUND[c], c === 'w' ? 0.22 : 0.14)); i++;
   }
   worldGroup.add(ground);
+
+  // boulders: one or two stacked blocks, the Blocky Lands' walls and the odd rock on the beach
+  const rocks = []; for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) if (MAP[z][x] === 'R') rocks.push([x, z]);
+  if (rocks.length) {
+    const stone = new THREE.InstancedMesh(box, mat(), rocks.length * 2);
+    rocks.forEach(([x, z], k) => {
+      const h = 0.7 + rng() * 0.9, s = 0.8 + rng() * 0.2;
+      dummy.position.set(wx(x), h / 2, wx(z)); dummy.rotation.set(0, rng() * 0.6, 0);
+      dummy.scale.set(s, h, s); dummy.updateMatrix();
+      stone.setMatrixAt(k * 2, dummy.matrix); stone.setColorAt(k * 2, jitter('#5a6478', 0.28));
+      const s2 = s * 0.6;
+      dummy.position.set(wx(x) + (rng() - 0.5) * 0.3, h + s2 / 2 - 0.05, wx(z) + (rng() - 0.5) * 0.3);
+      dummy.rotation.set(0, rng() * 0.8, 0); dummy.scale.set(s2, s2, s2); dummy.updateMatrix();
+      stone.setMatrixAt(k * 2 + 1, dummy.matrix); stone.setColorAt(k * 2 + 1, jitter('#6d7788', 0.28));
+    });
+    worldGroup.add(stone);
+  }
 
   // trees: a trunk and one or two leaf blocks
   const trees = []; for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) if (MAP[z][x] === 'T') trees.push([x, z]);
@@ -285,14 +406,24 @@ function buildWorld() {
   });
   worldGroup.add(trunks, leaves);
 
-  // tall grass: thin blades, three or four per tile, that shake when walked through
+  // the hiding places: a few blades or chunks per tile, that shake when walked through.
+  // Each region's cover looks like itself — tall grass, dark undergrowth, pale dune grass, rubble.
+  const COVER = {
+    H: { n:[3,4], h:[0.55,0.45], w:[0.16,0.08], c:['#4f9a44', '#3a8236'] },  // Grasslands
+    F: { n:[4,5], h:[0.40,0.30], w:[0.20,0.12], c:['#2d6b33', '#1f5226'] },  // Deep Forest: low and dense, so the trees do the hiding
+    S: { n:[3,4], h:[0.45,0.35], w:[0.11,0.06], c:['#cdb470', '#b89a52'] },  // Beach
+    B: { n:[2,3], h:[0.34,0.30], w:[0.34,0.16], c:['#8a7a66', '#6f6252'] },  // Blocky Lands
+  };
   const blades = [];
-  for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) if (MAP[z][x] === 'H') {
-    const n = 3 + (rng() < 0.5 ? 1 : 0), list = [];
+  for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) {
+    const cell = MAP[z][x];
+    if (!HIDES.has(cell)) continue;
+    const k = COVER[cell], n = k.n[0] + (rng() < 0.5 ? k.n[1] - k.n[0] : 0), list = [];
     for (let b = 0; b < n; b++) {
       list.push(blades.length);
       blades.push({ x: wx(x) + (rng() - 0.5) * 0.75, z: wx(z) + (rng() - 0.5) * 0.75,
-        h: 0.55 + rng() * 0.45, w: 0.16 + rng() * 0.08, c: rng() < 0.5 ? '#4f9a44' : '#3a8236', shake: 0 });
+        h: k.h[0] + rng() * k.h[1], w: k.w[0] + rng() * k.w[1],
+        c: rng() < 0.5 ? k.c[0] : k.c[1], shake: 0 });
     }
     tuftsByTile.set(z * N + x, list);
   }
@@ -423,6 +554,52 @@ function projectedDistance(obj, x, y) {
   return Math.hypot((tmpV.x + 1) / 2 * innerWidth - x, (1 - tmpV.y) / 2 * innerHeight - y);
 }
 
+// ---- The Octo Log, and saving -------------------------------------------------------------
+// This is an installed app now: it gets closed and reopened, so a catch has to survive that.
+// Only what was caught is saved — the world rebuilds itself from the seed, and balls refill.
+const SAVE_KEY = 'octomon-3d-save-v1';
+let caught = new Set();
+
+function saveGame() {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({ v: 1, caught: [...caught], skin }));
+  } catch (e) { /* private window, or storage full: the game still plays, it just forgets */ }
+}
+function loadGame() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    if (d && Array.isArray(d.caught)) caught = new Set(d.caught.filter(id => POOL.some(p => p.id === id)));
+    if (d && typeof d.skin === 'string' && SKINS.includes(d.skin)) skin = d.skin;
+  } catch (e) { caught = new Set(); }
+}
+function logCount() { return caught.size; }
+function drawLog() {
+  const box = $('cards'); box.innerHTML = '';
+  POOL.forEach(d => {
+    const got = caught.has(d.id);
+    const el = document.createElement('div');
+    el.className = 'card' + (got ? '' : ' empty');
+    el.innerHTML = got
+      ? `<div class="s">${d.sprite}</div><div class="n">${d.name}</div><div class="r">${d.rarity}</div>`
+      : `<div class="s">❓</div><div class="n">???</div><div class="r">not caught</div>`;
+    box.appendChild(el);
+  });
+  for (let i = POOL.length; i < LOG_SLOTS; i++) {   // the slots Asher has still to design
+    const el = document.createElement('div');
+    el.className = 'card empty';
+    el.innerHTML = `<div class="s">✏️</div><div class="n">TO DESIGN</div><div class="r">Asher's slot</div>`;
+    box.appendChild(el);
+  }
+  const left = POOL.filter(d => !caught.has(d.id));
+  $('logNote').textContent =
+    left.length === 0 ? 'Every Octomon caught. Octo Champion.'
+    : (left.length === 1 && left[0].lastOne) ? 'Only the Rage Monster left. He is in the Deep Forest.'
+    : `${logCount()} caught, ${left.length} still out there.`;
+}
+function hudLog() { $('hCaught').textContent = logCount(); }
+
 // ---- State -------------------------------------------------------------------------------
 let scene, state, creature = null, meeting = false, camYaw = 0;
 const P = { x: 0, z: 0, px: 0, pz: 0, fx: 0, fz: -1, speed: 0, phase: 0 }; // player; px/pz last step's
@@ -441,7 +618,7 @@ function reset() {
 const R = 0.3; // the player's footprint radius, blocks
 function free(x, z) {
   for (const [ox, oz] of [[-R,-R],[R,-R],[-R,R],[R,R]]) {
-    const c = at(tileOf(x + ox), tileOf(z + oz)); if (c === 'T' || c === 'K') return false;
+    if (BLOCKED.has(at(tileOf(x + ox), tileOf(z + oz)))) return false;
   }
   if (creature && Math.hypot(x - creature.x, z - creature.z) < 0.6) return false;
   return true;
@@ -483,7 +660,7 @@ function walk(dt) {
 // ---- Tall grass: rustle, then an Octomon appears ----------------------------------------
 function grass(moved) {
   const tx = tileOf(P.x), tz = tileOf(P.z), id = tz * N + tx;
-  if (at(tx, tz) !== 'H') { state.walked = 0; state.lastTile = id; return; }
+  if (!HIDES.has(at(tx, tz))) { state.walked = 0; state.lastTile = id; return; }
   if (id !== state.lastTile) { shakeTile(tx, tz, 0.35); state.lastTile = id; } // stepping in shakes it a little
   state.walked += moved;
   if (state.walked < 1) return;
@@ -492,7 +669,7 @@ function grass(moved) {
   if (rng() < tune.rustleRate) {
     const spot = appearSpot();
     if (!spot) return;
-    state.pending = { t: tune.rustleTime, x: spot.x, z: spot.z };
+    state.pending = { t: tune.rustleTime, x: spot.x, z: spot.z, cell: at(tx, tz) };
     shakeTile(tileOf(spot.x), tileOf(spot.z), 1);
     state.rustles++; events.push({ type: 'rustle', step: Math.round(state.t / STEP) });
   }
@@ -502,19 +679,31 @@ function appearSpot() { // in front of the player, on open ground, nudged sidewa
     const c = Math.cos(turn), s = Math.sin(turn);
     const fx = P.fx * c - P.fz * s, fz = P.fx * s + P.fz * c;
     const x = P.x + fx * tune.appearDist, z = P.z + fz * tune.appearDist;
-    const t = at(tileOf(x), tileOf(z));
-    if (t !== 'T' && t !== 'K') return { x, z };
+    if (!BLOCKED.has(at(tileOf(x), tileOf(z)))) return { x, z };
   }
   return null;
 }
-function roll() {
-  let total = 0; POOL.forEach(d => total += d.weight);
-  let r = rng() * total;
-  for (const d of POOL) { r -= d.weight; if (r <= 0) return d; }
-  return POOL[0];
+// Which Octomon can appear in this hiding place. Rage Monster waits in the Deep Forest until
+// every other one is in the Octo Log — the 2D build's rule, so he is the last thing you catch.
+function haveAllButLast() {
+  return POOL.filter(d => !d.lastOne).every(d => caught.has(d.id));
 }
-function spawnCreature(x, z) {
-  const d = roll();
+function poolFor(cell) {
+  let pool = POOL.filter(d => d.tiles.includes(cell));
+  if (!haveAllButLast()) pool = pool.filter(d => !d.lastOne);
+  return pool;
+}
+function roll(cell) {
+  const pool = poolFor(cell);
+  if (!pool.length) return null;
+  let total = 0; pool.forEach(d => total += d.weight);
+  let r = rng() * total;
+  for (const d of pool) { r -= d.weight; if (r <= 0) return d; }
+  return pool[0];
+}
+function spawnCreature(x, z, cell) {
+  const d = roll(cell);
+  if (!d) return;                       // nothing lives in this cover yet
   const sprite = emojiSprite(d.sprite, tune.creatureSize);
   const shadow = blobShadow();
   sprite.position.set(x, 0, z); shadow.position.set(x, 0.02, z);
@@ -530,7 +719,7 @@ function updateCreature(dt) {
   if (state.pending) {
     state.pending.t -= dt;
     shakeTile(tileOf(state.pending.x), tileOf(state.pending.z), 1);
-    if (state.pending.t <= 0) { spawnCreature(state.pending.x, state.pending.z); state.pending = null; }
+    if (state.pending.t <= 0) { spawnCreature(state.pending.x, state.pending.z, state.pending.cell); state.pending = null; }
   }
   if (!creature) return;
   creature.t += dt; creature.popT = Math.min(1, creature.popT + dt / 0.35);
@@ -552,16 +741,20 @@ function endMeet(how) { // caught, ran or escaped: the Octomon leaves the grass 
 // The same screen, rules and timings. Changed for the 3D spike: rolls use rng(); numbers come
 // from config.js; no perks (no bonus, normal Weaken); Grasslet has no special move, so the
 // other Octomon's moves are left out; no money, Sandstone or Octo Log lines.
-let foe = null, turns = 0, busy = false, balls = 0;
+let foe = null, turns = 0, busy = false, balls = 0, skipThrow = false;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 function encounter(sp) {
-  foe = { ...sp, maxHp: tune.grassletHp, hp: tune.grassletHp, base: tune.grassletBase };
-  turns = 0; busy = false;
+  // Grasslet's numbers stay in config.js so they can be tuned live; the rest come from POOL.
+  const hp = sp.id === 'grasslet' ? tune.grassletHp : sp.hp;
+  const base = sp.id === 'grasslet' ? tune.grassletBase : sp.base;
+  foe = { ...sp, maxHp: hp, hp, base, usedMove: false, wall: false, rebuilt: false };
+  turns = 0; busy = false; skipThrow = false;
   const el = $('fSprite'); el.className = 'sprite'; el.textContent = foe.sprite;
   $('fName').textContent = 'Wild ' + foe.name;
   $('fTag').textContent = foe.biome + ' · ' + foe.rarity;
   $('log').innerHTML = '';
   say('A wild ' + foe.name + ' appears!', true);
+  if (foe.move === 'wall') { foe.wall = true; say('Mr. Crab Pants builds a SAND WALL!'); }
   refresh(); $('fight').classList.remove('hide');
 }
 function odds() { return Math.min(tune.maxOdds, foe.base + (1 - foe.hp / foe.maxHp) * tune.hpOddsBonus); }
@@ -569,12 +762,13 @@ function refresh() {
   $('fBar').style.width = (foe.hp / foe.maxHp * 100) + '%';
   $('fHp').textContent = 'HP ' + foe.hp + '/' + foe.maxHp;
   $('fOdds').textContent = 'Catch ' + Math.round(odds() * 100) + '%';
+  $('fWall').textContent = foe.wall ? '🧱 Sand Wall is up — balls bounce off!' : '';
   lock(busy);
   hud();
 }
 function lock(on) {
   ['bWeak', 'bBall', 'bRun'].forEach(id => $(id).disabled = on);
-  if (!on) $('bBall').disabled = balls <= 0;
+  if (!on) $('bBall').disabled = balls <= 0 || skipThrow;
 }
 function say(t, big) {
   const l = $('log'), p = document.createElement('p');
@@ -592,6 +786,15 @@ function hurtFX(n) {
 }
 async function weaken() {
   if (busy) return; busy = true; lock(true);
+  // Sand Wall takes the hit instead: you have to knock it down before the Octomon feels anything
+  if (foe.wall) {
+    foe.wall = false; say('You smash the sand wall down!'); quake();
+    if (foe.move === 'wall' && !foe.rebuilt && rng() < 0.5) {
+      foe.rebuilt = true; foe.wall = true; say('He rebuilds it! Only once though.');
+    }
+    events.push({ type: 'wall', up: foe.wall });
+    refresh(); await sleep(400); return foeTurn();
+  }
   const hit = tune.weakenMin + Math.floor(rng() * tune.weakenRand);
   foe.hp = Math.max(1, foe.hp - hit);
   hurtFX(hit);
@@ -601,10 +804,28 @@ async function weaken() {
 }
 async function throwBall() {
   if (busy) return;
+  if (skipThrow) { say("You're pinned — you can only weaken."); return; }
   if (balls <= 0) { say('No Octeo balls left!'); return; }
   busy = true; lock(true);
+  // Sand Wall: the ball never reaches him, and you lose it
+  if (foe.wall) {
+    balls--; say('The ball bounces off the sand wall. Wasted.');
+    events.push({ type: 'throw', blocked: 'wall' });
+    refresh(); await sleep(400); return foeTurn();
+  }
   balls--;
   const fb = $('flyball'), sp = $('fSprite');
+  // Hook Whirl: St. Pirate catches the ball on his hook, once per encounter
+  if (foe.move === 'hook' && !foe.usedMove && rng() < 0.5) {
+    foe.usedMove = true;
+    fb.setAttribute('class', 'fly'); say('You throw an Octeo ball...');
+    await sleep(560);
+    fb.setAttribute('class', 'pop'); quake();
+    say('HOOK WHIRL! St. Pirate catches the ball on his hook and flings it away.', true);
+    events.push({ type: 'throw', blocked: 'hook' });
+    await sleep(480); fb.setAttribute('class', '');
+    refresh(); return foeTurn();
+  }
   fb.setAttribute('class', 'fly'); say('You throw an Octeo ball...');
   await sleep(560);
   sp.classList.add('gone');
@@ -627,13 +848,59 @@ async function throwBall() {
   refresh(); foeTurn();
 }
 async function capture() {
+  const first = !caught.has(foe.id);
+  caught.add(foe.id); saveGame(); hudLog();
   say('Caught! You caught the ' + foe.name + '.', true);
+  if (first) say(foe.name + ' joins your Octo Log. (' + logCount() + '/' + LOG_SLOTS + ')');
+  events.push({ type: 'caught', id: foe.id, total: logCount() });
+  const done = POOL.every(d => caught.has(d.id));
+  if (done) say('Every Octomon caught. You are the OCTO CHAMPION!', true);
   hud();
   await sleep(1300); busy = false;
   endMeet('caught');
+  if (done) toast('🏆 <b>OCTO CHAMPION</b> — every Octomon is in the log.');
 }
 async function foeTurn() {
   turns++;
+  skipThrow = false;
+
+  // TACO RAIN — tacos fall from the sky and heal Tacoman all the way up. Once.
+  if (foe.move === 'taco' && !foe.usedMove && foe.hp < foe.maxHp * 0.5) {
+    foe.usedMove = true; foe.hp = foe.maxHp;
+    say('TACO RAIN! Tacos fall from the sky and heal Tacoman all the way up.', true);
+    events.push({ type: 'move', move: 'taco' });
+    busy = false; return refresh();
+  }
+  // BOMB ATTACK — Mr. Flyer drops a bomb and destroys two of your Octeo balls. Once.
+  if (foe.move === 'bomb' && !foe.usedMove && turns >= 2) {
+    foe.usedMove = true; quake();
+    const lost = Math.min(2, balls); balls -= lost;
+    say('BOMB ATTACK! Mr. Flyer drops a bomb and destroys ' + lost + ' of your Octeo balls.', true);
+    events.push({ type: 'move', move: 'bomb', lost });
+    busy = false; return refresh();
+  }
+  // MECH BLAST — a blast big enough to end the encounter and throw you back to the crossroads.
+  if (foe.move === 'blast' && !foe.usedMove && turns >= 3) {
+    foe.usedMove = true; quake();
+    say('MECH BLAST! A huge blast knocks you back to the crossroads.', true);
+    events.push({ type: 'move', move: 'blast' });
+    await sleep(1300);
+    busy = false;
+    endMeet('blasted');
+    P.x = P.px = wx(START.x); P.z = P.pz = wx(START.z); P.speed = 0;
+    placeCamera(true);
+    return;
+  }
+  // WRESTLING MOVES — Rage Monster picks a random one every turn.
+  if (foe.move === 'wrestle') {
+    const m = Math.floor(rng() * 3); quake();
+    if (m === 0) say("BODY SLAM! You're flattened and lose your turn.", true);
+    if (m === 1) { const l = Math.min(1, balls); balls -= l; say('SUPLEX! He throws your Octeo ball back and it\'s gone.', true); }
+    if (m === 2) { skipThrow = true; say("PIN! You can't throw next turn — only weaken.", true); }
+    events.push({ type: 'move', move: 'wrestle', which: m });
+    busy = false; return refresh();
+  }
+
   if (turns >= tune.escapeTurns) {
     say('The ' + foe.name + ' escapes into the wild.');
     $('fSprite').classList.add('gone');
@@ -650,6 +917,19 @@ $('bWeak').addEventListener('click', weaken);
 $('bBall').addEventListener('click', throwBall);
 $('bRun').addEventListener('click', flee);
 
+let shownRegion = null;
+function showRegion() {   // the banner names whichever region you are standing in
+  const r = regionAtPlayer();
+  if (r === shownRegion) return;
+  shownRegion = r;
+  $('region').textContent = REGIONS[r].name;
+  events.push({ type: 'region', name: r });
+}
+function openLog() { drawLog(); $('logScreen').classList.remove('hide'); }
+function closeLog() { $('logScreen').classList.add('hide'); }
+$('logBtn').addEventListener('click', openLog);
+$('logClose').addEventListener('click', closeLog);
+
 function toast(html) { const el = $('toast'); if (!html) { el.classList.add('hide'); return; } el.innerHTML = html; el.classList.remove('hide'); }
 
 // ---- Camera: behind and slightly above, catching up smoothly ----------------------------
@@ -661,8 +941,7 @@ function faceSpot(dt, s) { // while it pops up: swing round so it is in view, a 
 function clearDistance() { // how far back the camera can sit before a tree or the shop is in the way
   const sx = Math.sin(camYaw), sz = Math.cos(camYaw);
   for (let d = 0.5; d <= tune.camDistance; d += 0.25) {
-    const c = at(tileOf(P.x + sx * d), tileOf(P.z + sz * d));
-    if (c === 'T' || c === 'K') return Math.max(1.4, d - 0.6);
+    if (BLOCKED.has(at(tileOf(P.x + sx * d), tileOf(P.z + sz * d)))) return Math.max(1.4, d - 0.6);
   }
   return tune.camDistance;
 }
@@ -690,6 +969,7 @@ const scenes = {
       if (!meeting && !popping) walk(dt);
       else { P.px = P.x; P.pz = P.z; P.speed = 0; look.dx = 0; }
       if (popping) faceSpot(dt, state.pending || creature);
+      showRegion();
       if (!meeting && creature && creature.popT >= 1 && (pressed('Enter') || pressed('Space'))) meet(); // laptop testing
       updateCreature(dt);
       placeCamera(false, dt);
@@ -703,11 +983,13 @@ const scenes = {
 function startPlay() {
   reset(); scene = 'play';
   $('title').classList.add('hide');
-  ['region', 'hint', 'balls'].forEach(id => $(id).classList.remove('hide'));
+  ['region', 'hint', 'balls', 'logBtn'].forEach(id => $(id).classList.remove('hide'));
+  hudLog(); showRegion();
   events.push({ type: 'scene', name: 'play' });
 }
 function showTitle() {
   const row = $('skins'); row.innerHTML = '';
+  setSkin(skin);
   SKINS.forEach(sk => {
     const b = document.createElement('button'); b.textContent = sk; if (sk === skin) b.className = 'on';
     b.onclick = () => { setSkin(sk); showTitle(); };
@@ -759,6 +1041,10 @@ function frame() { tick(); requestAnimationFrame(frame); }
 function timer() { if (document.visibilityState === 'visible' && clock.now() - last > 0.1) tick(); }
 
 // ---- What a check can read and drive (?manual=1 stops the loop; players never see it) ----
+window.__roll = cell => roll(cell);                                  // a check inspects the spawn table
+window.__catchAll = () => { POOL.filter(d => !d.lastOne).forEach(d => caught.add(d.id)); saveGame(); hudLog(); };
+window.__yaw = y => { camYaw = y; placeCamera(true); };   // a check aims the camera
+window.__peek = (x, z) => at(x, z);   // a check reads the map; players never see it
 window.game = {
   get scene() { return scene; },
   get state() { return state; },
@@ -770,6 +1056,16 @@ window.game = {
   press(code) { hit.add(code); },
   hold(code, on) { on ? down.add(code) : down.delete(code); },
   get events() { return events; },
+  get caught() { return [...caught]; },
+  get region() { return regionAtPlayer(); },
+  warp(tx, tz) { P.x = P.px = wx(tx); P.z = P.pz = wx(tz); P.speed = 0; placeCamera(true); showRegion(); },
+  spawn(id, dist = 2.2) {   // put a named Octomon in front of the player, to check its move
+    const d = POOL.find(p => p.id === id); if (!d) return false;
+    if (creature) removeCreature();
+    spawnCreature(P.x + P.fx * dist, P.z + P.fz * dist, d.tiles[0]);
+    if (creature) { creature.d = d; creature.sprite.material.map = emojiTexture(d.sprite); creature.popT = 1; }
+    return !!creature;
+  },
   step(n = 1, draw = true, alpha = 1) {
     for (let i = 0; i < n; i++) step();
     if (draw) { ALPHA = alpha; drawFrame(); }
@@ -777,6 +1073,7 @@ window.game = {
 };
 
 // ---- Boot ----------------------------------------------------------------------------------
+if (params.get('fresh') !== '1') loadGame();   // ?fresh=1 starts a clean game, for checking
 seed = Number(params.get('seed')) || CONFIG.seed;
 makeMap(); buildWorld();
 playerSprite = emojiSprite(skin, tune.playerSize); playerShadow = blobShadow();
