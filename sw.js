@@ -1,7 +1,7 @@
 // PROTOTYPE - NOT FOR PRODUCTION
 // Offline cache for OCTOMON 3D, so it plays from the iPad home screen with no internet.
 // Bump VERSION whenever a cached file changes; the old cache is deleted on activate.
-const VERSION = 'octomon-3d-v7';   // bumped: four regions, the roster and the Octo Log
+const VERSION = 'octomon-3d-v8';   // bumped: four regions, the roster and the Octo Log
 const FILES = [
   './',
   './index.html',
