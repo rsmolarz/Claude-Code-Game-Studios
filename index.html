@@ -164,6 +164,15 @@
   .shelf .txt b{display:block; font-family:var(--display); font-size:12px; color:var(--amber);}
   /* button.primary is width:100% — the shop's Buy buttons must not be, or they crush the text */
   .shelf button{margin:0; font-size:12px; padding:9px 12px; width:auto; flex:0 0 auto; min-width:84px;}
+  .shelf .have{color:var(--muted); font-size:11px;}
+  /* the ball picker in a fight — one chip per kind you are carrying */
+  .strip{display:flex; gap:6px; flex-wrap:wrap; margin:0 0 6px;}
+  .strip .chip{margin:0; width:auto; flex:0 0 auto; font-size:17px; line-height:1;
+    padding:7px 10px; background:var(--ink); border:2px solid var(--edge); border-radius:10px;
+    display:flex; align-items:center; gap:4px; min-width:0;}
+  .strip .chip b{font-family:var(--display); font-size:11px; color:var(--muted);}
+  .strip .chip.on{border-color:var(--amber); background:#2b2140;}
+  .strip .chip.on b{color:var(--amber);}
   .price{color:#f2d24b; font-family:var(--display); font-size:12px;}
   #shopLog:empty{display:none;}   /* no empty bar before you have bought anything */
 
@@ -317,6 +326,9 @@
       <button class="ghost" id="teamCancel" style="width:100%;margin-top:6px;">Never mind</button>
     </div>
 
+    <!-- the balls you are carrying: tap one to choose which to throw -->
+    <div id="ballStrip" class="strip hide"></div>
+
     <div id="fightBtns" style="display:flex;flex-wrap:wrap;">
       <button id="bWeak">Weaken</button>
       <button class="ball" id="bBall">Throw Octeo ball</button>
@@ -365,17 +377,31 @@ const POOL = [
     tiles:['B'],          weight:22, hp:34, base:0.14, move:'blast' },
   { id:'flyer', pay:14,    name:'Mr. Flyer',       sprite:'🦅', biome:'Unknown — anywhere', rarity:'12/10',
     tiles:['H','S','B','F'], weight:2, hp:34, base:0.10, move:'bomb' },
+  { id:'swoopy', pay:4,    name:'Swoopy',          sprite:'🦇', biome:"Harper's — the sky", rarity:'4/10',
+    tiles:['H','B'],      weight:14, hp:18, base:0.30 },
   { id:'rage', pay:20,     name:'Rage Monster',    sprite:'🤼', biome:'Forest',            rarity:'RAREST',
     tiles:['F'],          weight:4,  hp:40, base:0.08, move:'wrestle', lastOne:true },
 ];
 const LOG_SLOTS = 8;
-// What the shop sells, at the 2D build's prices. The Hypercar's $25.60 is Asher's number.
+const SAND_TO_EVOLVE = 8;   // eight, because Octomon
+
+// The balls. Asher played twice, said catching was too hard, and designed three better ones.
+// The prices are his: 20, 50, and 500 for the Super Duper, which he wanted to always work.
+// 500 is meant to be a lot — a Grasslet pays 2, so you have to save up for a long time.
+const BALLS = [
+  { id:'octeo', name:'Octeo ball',           icon:'🟣', cost:2.00,   bonus:0,     desc:'The one you start with.' },
+  { id:'great', name:'Great Octoball',       icon:'🔵', cost:20.00,  bonus:0.18,  desc:'A better chance of catching.' },
+  { id:'ultra', name:'Ultra Octoball',       icon:'🟡', cost:50.00,  bonus:0.35,  desc:'Better still.' },
+  { id:'super', name:'Super Duper Octoball', icon:'🌈', cost:500.00, always:true, desc:'Catches it every single time. Save up.' },
+];
+const ballById = id => BALLS.find(b => b.id === id);
+
+// What the shop sells. The Hypercar's $25.60 is Asher's number, and so are the ball prices.
 const SHOP_STOCK = [
-  { id:'ball', icon:'🟣', name:'Octeo ball', desc:'One more chance at a catch.',        cost:2.00 },
+  ...BALLS.map(b => ({ id:'ball-' + b.id, ball:b.id, icon:b.icon, name:b.name, desc:b.desc, cost:b.cost })),
   { id:'sand', icon:'🟨', name:'Sandstone',  desc:"Toward Mr. Crab Pants' evolution.",  cost:5.00 },
   { id:'car',  icon:'🏎️', name:'Hypercar',   desc:'Drive straight to any region. Buy once.', cost:25.60 },
 ];
-const SAND_TO_EVOLVE = 8;   // eight, because Octomon
 // Every region: the encounter tile its Octomon hide in, and the name shown on screen.
 // at: where the Hypercar drops you, on open ground well inside the region.
 const REGIONS = {
@@ -643,17 +669,50 @@ const MODELS = {
     [-.11, .30, .50, .07, .07, .07, '#14202e'], [.11, .30, .50, .07, .07, .07, '#14202e'],
     [0, .44, .30, .05, .14, .05, '#3f8f2a'],
   ],
-  // the pirate: floppy hat, X over one eye, a hook for one hand
+  // St. Pirate. Asher played round two and said: "could you make it a little more different
+  // than Mr. Taco Man?" He was right — they were both a tall body under a wide hat brim. So
+  // this one is short and barrel-chested, in a black three-corner hat with a skull on it, with
+  // a beard, a gold belt buckle, turned-down boots, and the hook out on a longer arm. Nothing
+  // on his card changed: the X is still over one eye, and the hook is still the throwing hand.
   pirate: [
-    [0, .38, 0, .46, .76, .34, '#a33c2e'],                     // body
-    [0, .92, 0, .40, .34, .34, '#c0553f'],                     // head
-    [0, 1.13, 0, .86, .10, .60, '#5e2118'],                    // hat brim
-    [0, 1.24, 0, .40, .16, .30, '#7d2d22'],                    // hat crown
-    [-.11, .95, .18, .09, .09, .03, '#14202e'],                // eye
-    [.12, .95, .18, .13, .04, .03, '#14202e'], [.12, .95, .18, .04, .13, .03, '#14202e'], // the X
-    [-.31, .52, 0, .16, .46, .16, '#a33c2e'], [.31, .52, 0, .16, .46, .16, '#a33c2e'],    // arms
-    [.33, .25, .04, .09, .22, .09, '#c9ccd6'], [.40, .17, .04, .18, .08, .08, '#c9ccd6'], // the hook
-    [-.13, .07, 0, .16, .18, .22, '#5e2118'], [.13, .07, 0, .16, .18, .22, '#5e2118'],
+    [0, .50, 0, .64, .50, .42, '#8e2f24'],                     // barrel chest — wide, not tall
+    [0, .60, .21, .16, .34, .04, '#d8c9a8'],                   // the open front of his coat
+    [0, .24, 0, .62, .20, .42, '#8e2f24'],                     // hips
+    [0, .34, 0, .68, .11, .44, '#2b1c10'],                     // belt
+    [0, .34, .23, .15, .13, .04, '#e8c04a'],                   // gold buckle
+    [0, .86, 0, .38, .30, .32, '#d08a68'],                     // head
+    [0, .73, .12, .29, .17, .18, '#2b2018'],                   // beard
+    [-.10, .92, .17, .08, .08, .03, '#14202e'],                // one good eye
+    [.12, .92, .17, .14, .04, .03, '#14202e'], [.12, .92, .17, .04, .14, .03, '#14202e'], // the X
+    [0, 1.04, 0, .90, .08, .54, '#1d1a26'],                    // three-corner hat: the flat brim
+    [-.42, 1.11, 0, .18, .09, .26, '#1d1a26'], [.42, 1.11, 0, .18, .09, .26, '#1d1a26'],  // two turned-up corners
+    [0, 1.11, -.24, .30, .09, .14, '#1d1a26'],                 // and the third, at the back
+    [0, 1.13, 0, .34, .14, .28, '#1d1a26'],                    // crown
+    [0, 1.13, .15, .11, .11, .03, '#f4efe2'],                  // the skull on the front
+    [-.38, .60, 0, .16, .34, .16, '#8e2f24'],                  // left arm
+    [-.38, .40, 0, .18, .09, .18, '#d8c9a8'],                  // its cuff
+    [.42, .62, .06, .16, .30, .16, '#8e2f24'],                  // the hook arm, held out
+    [.42, .44, .06, .18, .09, .18, '#d8c9a8'],
+    [.42, .33, .06, .08, .16, .08, '#c9ccd6'], [.47, .24, .06, .20, .08, .08, '#c9ccd6'],
+    [.56, .30, .06, .07, .14, .08, '#c9ccd6'],                 // the curve of the hook
+    [-.16, .09, .02, .22, .18, .28, '#2b1c10'], [.16, .09, .02, .22, .18, .28, '#2b1c10'], // boots
+    [-.16, .20, 0, .24, .09, .26, '#3d2a17'], [.16, .20, 0, .24, .09, .26, '#3d2a17'],     // turned-down tops
+  ],
+  // SWOOPY — Harper's, and the first one that isn't Asher's. She is six and told me only that
+  // it flies and is a bird or a bat, so this is a draft and the colours are a guess: she picks
+  // them, and the name is hers already. Round body, wings out, big eyes, little orange feet.
+  swoopy: [
+    [0, .50, 0, .44, .44, .38, '#9a6fd6'],                     // round body
+    [0, .46, .19, .26, .28, .05, '#f7f0ff'],                   // pale front
+    [0, .82, 0, .38, .34, .34, '#9a6fd6'],                     // head
+    [-.11, 1.04, -.02, .09, .18, .07, '#9a6fd6'], [.11, 1.04, -.02, .09, .18, .07, '#9a6fd6'], // bat ears
+    [-.10, .86, .18, .13, .13, .03, '#f7f0ff'], [.10, .86, .18, .13, .13, .03, '#f7f0ff'], // big eyes
+    [-.10, .86, .20, .07, .07, .03, '#14202e'], [.10, .86, .20, .07, .07, .03, '#14202e'],
+    [0, .75, .19, .10, .07, .09, '#f2a63b'],                   // little beak
+    [-.44, .58, -.02, .44, .24, .15, '#7a52b8'], [.44, .58, -.02, .44, .24, .15, '#7a52b8'], // wings
+    [-.72, .48, -.04, .22, .17, .11, '#9a6fd6'], [.72, .48, -.04, .22, .17, .11, '#9a6fd6'], // wing tips, dipped
+    [0, .40, -.26, .20, .12, .22, '#7a52b8'],                  // tail fan
+    [-.10, .12, .04, .13, .13, .20, '#f2a63b'], [.10, .12, .04, .13, .13, .20, '#f2a63b'], // feet
   ],
   // brown hat, green face in sunglasses, blue body
   taco: [
@@ -828,14 +887,15 @@ let coins = 0, sand = 0, hasCar = false, evolved = false;
 const money = n => n.toFixed(2) + ' Octo Money';   // Asher named the money
 const blankPlayer = (name, sk) => ({
   name, skin: sk || SKINS[0], caught: [], levels: {}, missed: [],
-  coins: 0, sand: 0, car: false, evolved: false, balls: CONFIG.balls,
+  coins: 0, sand: 0, car: false, evolved: false,
+  balls: { octeo: tune.startBalls, great: 0, ultra: 0, super: 0 },
 });
 
 function packPlayer() {   // the game in play, written back into the roster
   const p = players[current]; if (!p) return;
   p.skin = skin; p.caught = [...caught]; p.coins = coins;
   p.levels = { ...levels }; p.missed = [...missed];
-  p.sand = sand; p.car = hasCar; p.evolved = evolved; p.balls = balls;
+  p.sand = sand; p.car = hasCar; p.evolved = evolved; p.balls = { ...bag };
 }
 function unpackPlayer(i) {   // and a roster entry loaded into the game
   current = Math.max(0, Math.min(i, players.length - 1));
@@ -849,7 +909,7 @@ function unpackPlayer(i) {   // and a roster entry loaded into the game
   missed = new Set((p.missed || []).filter(id => POOL.some(d => d.id === id) && !caught.has(id)));
   coins = Math.max(0, p.coins || 0); sand = Math.max(0, p.sand || 0);
   hasCar = !!p.car; evolved = !!p.evolved;
-  balls = Number.isFinite(p.balls) ? p.balls : CONFIG.balls;
+  bag = normaliseBag(p.balls); choosePick();
   skin = SKINS.includes(p.skin) ? p.skin : SKINS[0];
   // King Crab Pants is per player: one child's evolution is not another's
   const crab = POOL.find(d => d.id === 'crab');
@@ -945,7 +1005,8 @@ function drawShop() {
   SHOP_STOCK.forEach(it => {
     const owned = it.id === 'car' && hasCar;
     const row = document.createElement('div'); row.className = 'shelf';
-    row.innerHTML = `<div class="ic">${it.icon}</div><div class="txt"><b>${it.name}</b>${it.desc}<br><span class="price">${money(it.cost)}</span></div>`;
+    const got = it.ball ? ` &nbsp;<span class="have">you have ${bag[it.ball] || 0}</span>` : '';
+    row.innerHTML = `<div class="ic">${it.icon}</div><div class="txt"><b>${it.name}</b>${it.desc}<br><span class="price">${money(it.cost)}</span>${got}</div>`;
     const b = document.createElement('button');
     b.className = 'primary'; b.textContent = owned ? 'OWNED' : 'Buy';
     b.disabled = owned || coins < it.cost;
@@ -956,7 +1017,7 @@ function drawShop() {
 function buy(it) {
   if (coins < it.cost || (it.id === 'car' && hasCar)) return;
   coins -= it.cost;
-  if (it.id === 'ball') balls++;
+  if (it.ball) { bag[it.ball] = (bag[it.ball] || 0) + 1; choosePick(); }
   if (it.id === 'sand') sand++;
   if (it.id === 'car') hasCar = true;
   const p = document.createElement('p'); p.className = 'hit';
@@ -1005,8 +1066,9 @@ function reset() {
   // Balls belong to the player, not to the session: a game resumed mid-way keeps what it had,
   // and only a brand-new player starts on a full pocket.
   const p = players[current];
-  balls = (p && Number.isFinite(p.balls)) ? p.balls : tune.startBalls;
-  hud();
+  bag = p ? normaliseBag(p.balls) : { octeo: tune.startBalls, great: 0, ultra: 0, super: 0 };
+  choosePick();
+  choosePick(); hud();
 }
 
 // ---- Walking -----------------------------------------------------------------------------
@@ -1146,7 +1208,21 @@ function endMeet(how) { // caught, ran or escaped: the Octomon leaves the grass 
 // The same screen, rules and timings. Changed for the 3D spike: rolls use rng(); numbers come
 // from config.js; no perks (no bonus, normal Weaken); Grasslet has no special move, so the
 // other Octomon's moves are left out; no money, Sandstone or Octo Log lines.
-let foe = null, turns = 0, busy = false, balls = 0, skipThrow = false;
+let foe = null, turns = 0, busy = false, skipThrow = false;
+let bag = { octeo: 0, great: 0, ultra: 0, super: 0 };   // how many of each kind you have
+let pick = 'octeo';                                      // which one the Throw button uses
+const ballCount = () => BALLS.reduce((n, b) => n + (bag[b.id] || 0), 0);
+function normaliseBag(v) {   // a save from before the new balls kept a single number
+  if (Number.isFinite(v)) return { octeo: Math.max(0, v), great: 0, ultra: 0, super: 0 };
+  const out = { octeo: 0, great: 0, ultra: 0, super: 0 };
+  if (v && typeof v === 'object') for (const b of BALLS) if (Number.isFinite(v[b.id])) out[b.id] = Math.max(0, v[b.id]);
+  return out;
+}
+function choosePick() {   // keep the chosen kind to one you actually have
+  if ((bag[pick] || 0) > 0) return;
+  const got = BALLS.find(b => (bag[b.id] || 0) > 0);
+  pick = got ? got.id : 'octeo';
+}
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 function encounter(sp) {
   // Grasslet's numbers stay in config.js so they can be tuned live; the rest come from POOL.
@@ -1164,10 +1240,16 @@ function encounter(sp) {
   refresh(); $('fight').classList.remove('hide');
 }
 function odds() { return Math.min(tune.maxOdds, foe.base + (1 - foe.hp / foe.maxHp) * tune.hpOddsBonus); }
+// what the Catch % shows: the bare odds plus whatever the ball in your hand adds
+function shownOdds() {
+  const b = ballById(pick);
+  if (!b || !ballCount()) return odds();
+  return b.always ? 1 : Math.min(0.99, odds() + (b.bonus || 0));
+}
 function refresh() {
   $('fBar').style.width = (foe.hp / foe.maxHp * 100) + '%';
   $('fHp').textContent = 'HP ' + foe.hp + '/' + foe.maxHp;
-  $('fOdds').textContent = 'Catch ' + Math.round(odds() * 100) + '%';
+  $('fOdds').textContent = 'Catch ' + Math.round(shownOdds() * 100) + '%';
   $('fWall').textContent = foe.wall ? '🧱 Sand Wall is up — balls bounce off!' : '';
   lock(busy);
   hud();
@@ -1175,7 +1257,8 @@ function refresh() {
 function lock(on) {
   ['bWeak', 'bBall', 'bRun', 'bSend'].forEach(id => $(id).disabled = on);
   if (on) return;
-  $('bBall').disabled = balls <= 0 || skipThrow;
+  $('bBall').disabled = ballCount() <= 0 || skipThrow;
+  drawBallStrip();
   // with one of yours out, the first button is its attack; otherwise you weaken by hand
   $('bWeak').textContent = mine ? 'Attack' : 'Weaken';
   const canSend = POOL.some(d => caught.has(d.id) && !spent.has(d.id));
@@ -1186,7 +1269,37 @@ function say(t, big) {
   p.textContent = t; if (big) p.className = 'hit';
   l.appendChild(p); l.scrollTop = l.scrollHeight;
 }
-function hud() { $('hBalls').textContent = balls; }
+function hud() { $('hBalls').textContent = ballCount(); }
+// something destroyed your balls: lose the cheapest kinds first, never the good ones
+function takeBalls(n) {
+  let gone = 0;
+  for (const b of BALLS) {
+    while (gone < n && (bag[b.id] || 0) > 0) { bag[b.id]--; gone++; }
+    if (gone >= n) break;
+  }
+  choosePick();
+  return gone;
+}
+// the row of balls in a fight: tap one to pick which to throw
+function drawBallStrip() {
+  const box = $('ballStrip'); if (!box) return;
+  const have = BALLS.filter(b => (bag[b.id] || 0) > 0);
+  box.innerHTML = '';
+  if (have.length < 2) box.classList.add('hide');
+  else {
+    box.classList.remove('hide');
+    for (const b of have) {
+      const el = document.createElement('button');
+      el.className = 'chip' + (b.id === pick ? ' on' : '');
+      el.innerHTML = b.icon + '<b>' + bag[b.id] + '</b>';
+      el.title = b.name;
+      el.onclick = () => { if (!busy) { pick = b.id; refresh(); } };
+      box.appendChild(el);
+    }
+  }
+  const p = ballById(pick);
+  $('bBall').textContent = (bag[pick] || 0) > 0 ? 'Throw ' + p.name : 'No balls left';
+}
 function quake() { const p = $('fight').firstElementChild; p.classList.remove('quake'); void p.offsetWidth; p.classList.add('quake'); }
 function hurtFX(n) {
   const el = $('fSprite');
@@ -1290,20 +1403,22 @@ async function weaken() {
 async function throwBall() {
   if (busy) return;
   if (skipThrow) { say("You're pinned — you can only weaken."); return; }
-  if (balls <= 0) { say('No Octeo balls left!'); return; }
+  if (ballCount() <= 0) { say('No balls left!'); return; }
+  choosePick();
+  const ball = ballById(pick);
   busy = true; lock(true);
   // Sand Wall: the ball never reaches him, and you lose it
   if (foe.wall) {
-    balls--; say('The ball bounces off the sand wall. Wasted.');
+    bag[pick]--; say('The ' + ball.name + ' bounces off the sand wall. Wasted.');
     events.push({ type: 'throw', blocked: 'wall' });
     refresh(); await sleep(400); return foeTurn();
   }
-  balls--;
+  bag[pick]--; choosePick();
   const fb = $('flyball'), sp = $('fSprite');
   // Hook Whirl: St. Pirate catches the ball on his hook, once per encounter
   if (foe.move === 'hook' && !foe.usedMove && rng() < 0.5) {
     foe.usedMove = true;
-    fb.setAttribute('class', 'fly'); say('You throw an Octeo ball...');
+    fb.setAttribute('class', 'fly'); say('You throw a ' + ball.name + '...');
     await sleep(560);
     fb.setAttribute('class', 'pop'); quake();
     say('HOOK WHIRL! St. Pirate catches the ball on his hook and flings it away.', true);
@@ -1311,11 +1426,13 @@ async function throwBall() {
     await sleep(480); fb.setAttribute('class', '');
     refresh(); return foeTurn();
   }
-  fb.setAttribute('class', 'fly'); say('You throw an Octeo ball...');
+  fb.setAttribute('class', 'fly'); say('You throw a ' + ball.name + '...');
   await sleep(560);
   sp.classList.add('gone');
-  const caught = rng() < odds();
-  events.push({ type: 'throw', odds: odds(), caught });
+  // the better the ball, the better the chance; the Super Duper never misses
+  const chance = ball.always ? 1 : Math.min(0.99, odds() + (ball.bonus || 0));
+  const caught = ball.always ? true : (rng() < chance);
+  events.push({ type: 'throw', ball: ball.id, odds: chance, caught });
   for (let i = 0; i < 3; i++) {
     fb.setAttribute('class', ''); void fb.getBoundingClientRect(); fb.setAttribute('class', 'wobble');
     await sleep(520);
@@ -1370,8 +1487,8 @@ async function foeTurn() {
   // BOMB ATTACK — Mr. Flyer drops a bomb and destroys two of your Octeo balls. Once.
   if (foe.move === 'bomb' && !foe.usedMove && turns >= 2) {
     foe.usedMove = true; quake();
-    const lost = Math.min(2, balls); balls -= lost;
-    say('BOMB ATTACK! Mr. Flyer drops a bomb and destroys ' + lost + ' of your Octeo balls.', true);
+    const lost = takeBalls(2);
+    say('BOMB ATTACK! Mr. Flyer drops a bomb and destroys ' + lost + ' of your balls.', true);
     events.push({ type: 'move', move: 'bomb', lost });
     busy = false; return refresh();
   }
@@ -1392,7 +1509,7 @@ async function foeTurn() {
   if (foe.move === 'wrestle') {
     const m = Math.floor(rng() * 3); quake();
     if (m === 0) say("BODY SLAM! You're flattened and lose your turn.", true);
-    if (m === 1) { const l = Math.min(1, balls); balls -= l; say('SUPLEX! He throws your Octeo ball back and it\'s gone.', true); }
+    if (m === 1) { const l = takeBalls(1); say(l ? 'SUPLEX! He throws one of your balls back and it\'s gone.' : 'SUPLEX! He grabs at your empty bag.', true); }
     if (m === 2) { skipThrow = true; say("PIN! You can't throw next turn — only weaken.", true); }
     events.push({ type: 'move', move: 'wrestle', which: m });
     busy = false; return refresh();
@@ -1688,13 +1805,18 @@ function timer() { if (document.visibilityState === 'visible' && clock.now() - l
 
 // ---- What a check can read and drive (?manual=1 stops the loop; players never see it) ----
 window.__door = () => ({ x: DOOR.x, z: DOOR.z, cooldown: shopCooldown });
-window.__wallet = () => ({ coins, sand, car: hasCar, evolved, balls });
+window.__wallet = () => ({ coins, sand, car: hasCar, evolved, balls: ballCount(), bag: { ...bag }, pick });
 window.__modelInfo = () => creature && ({ id: creature.d.id, model: creature.model, boxes: MODELS[creature.d.id] ? MODELS[creature.d.id].length : 0 });
 window.__spent = () => [...spent];
 window.__battle = () => ({ mine: mine && { id: mine.id, lv: mine.lv, hp: mine.hp, maxHp: mine.maxHp, atk: mine.atk }, foeHp: foe && foe.hp });
 window.__sendOut = id => sendOut(id);
 window.__attack = () => attack();
 window.__levels = () => ({ levels: { ...levels }, missed: [...missed] });
+window.__balls = (b) => { if (b) bag = normaliseBag(b); choosePick(); hud();
+  if (meeting) refresh();
+  if (!$("shopScreen").classList.contains("hide")) drawShop();
+  return { ...bag }; };
+window.__pick = (id) => { if (id) { pick = id; if (meeting) refresh(); } return pick; };
 window.__players = () => ({ list: players.map(p => ({ n: p.name, s: p.skin, c: (p.caught||[]).length, coins: p.coins })), current });
 window.__give = (c, sd) => { coins += c; sand += sd || 0; saveGame(); hudMoney(); if (!$("shopScreen").classList.contains("hide")) drawShop(); };
 window.__roll = cell => roll(cell);                                  // a check inspects the spawn table
@@ -1706,7 +1828,7 @@ window.game = {
   get state() { return state; },
   get player() { return { x: P.x, z: P.z, yaw: camYaw }; },
   get creature() { return creature && { id: creature.d.id, x: creature.x, z: creature.z }; },
-  get fight() { return { open: meeting, busy, balls, turns, foe: foe && { hp: foe.hp, maxHp: foe.maxHp }, odds: foe ? odds() : 0 }; },
+  get fight() { return { open: meeting, busy, balls: ballCount(), bag: { ...bag }, pick, turns, foe: foe && { hp: foe.hp, maxHp: foe.maxHp }, odds: foe ? odds() : 0 }; },
   meet() { if (creature && !meeting) meet(); },
   weaken, throwBall, flee,
   press(code) { hit.add(code); },
@@ -1745,17 +1867,22 @@ scene = params.get('scene') || 'title';
 if (scene === 'title') showTitle();
 if (scene === 'play') startPlay();
 if (scene === 'figures') { // every Octomon side by side, in play's look — for checking the models
-  const line = [...POOL.map(d => d.id), 'ragejr'];
+  // ?only=pirate,swoopy shows just those, close up, for looking hard at one model
+  const only = (params.get('only') || '').split(',').filter(Boolean);
+  const line = only.length ? only : [...POOL.map(d => d.id), 'ragejr'];
+  const size = tune.creatureSize * (only.length ? 2.0 : 1);     // a few: big, for looking closely
+  const gap = only.length ? 2.6 : 1.75;
+  const mid = wx(START.x) - 0.9, row = wx(START.z) + (only.length ? 5.5 : -1);
   const figs = [];
   line.forEach((id, i) => {
-    const m = buildCreature(id, tune.creatureSize) || emojiSprite('❓', tune.creatureSize);
-    m.position.set(wx(START.x) - 7 + i * 1.75, 0, wx(START.z) - 1);
+    const m = buildCreature(id, size) || emojiSprite('❓', size);
+    m.position.set(mid + (i - (line.length - 1) / 2) * gap, 0, row);
     scene3.add(m); figs.push(m);
     const sh = blobShadow(); sh.position.copy(m.position); sh.position.y = 0.02; scene3.add(sh);
   });
   P.x = P.px = wx(START.x) + 9; P.z = P.pz = wx(START.z) - 1;   // player out of the way
-  camera.position.set(wx(START.x) - 0.9, 3.4, wx(START.z) + 11);
-  camera.lookAt(wx(START.x) - 0.9, 0.7, wx(START.z) - 1);
+  camera.position.set(mid, 3.4, wx(START.z) + 11);
+  camera.lookAt(mid, only.length ? 1.6 : 0.7, row);
   scenes.figures.update = dt => {
     state.t += dt;
     figs.forEach((m, i) => { m.rotation.y = state.t * 0.5 + i * 0.3; });   // turn slowly so all sides show
