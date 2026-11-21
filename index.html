@@ -379,10 +379,10 @@ const SAND_TO_EVOLVE = 8;   // eight, because Octomon
 // Every region: the encounter tile its Octomon hide in, and the name shown on screen.
 // at: where the Hypercar drops you, on open ground well inside the region.
 const REGIONS = {
-  forest: { name:'THE DEEP FOREST',   hide:'F', icon:'🌳', at:[8, 10] },
-  grass:  { name:'THE GRASSLANDS',    hide:'H', icon:'🌿', at:[26, 10] },
-  beach:  { name:'THE BEACH',         hide:'S', icon:'🏖️', at:[10, 26] },
-  blocky: { name:'THE BLOCKY LANDS',  hide:'B', icon:'🧱', at:[26, 26] },
+  forest: { name:'THE DEEP DARK FOREST',   hide:'F', icon:'🌳', at:[8, 10] },
+  grass:  { name:'GRASS APOCALYPSE',    hide:'H', icon:'🌿', at:[26, 10] },
+  beach:  { name:'BEACH LAYER',         hide:'S', icon:'🏖️', at:[10, 26] },
+  blocky: { name:'BLOCKY BLOCKLANDS',  hide:'B', icon:'🧱', at:[26, 26] },
   cross:  { name:'THE CROSSROADS',    hide:null },
 };
 // Skins. The first twelve are there from the start; the rest unlock as the Octo Log fills, one
@@ -630,6 +630,113 @@ function emojiTexture(ch) {
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
   texCache.set(ch, t); return t;
 }
+// ---- The Octomon as blocky 3D creatures ---------------------------------------------------
+// Asher asked for the Octomon to be 3D rather than flat pictures. The world is made of blocks,
+// so they are too. Each one is a list of boxes: [x, y, z, width, height, depth, colour].
+// y is the middle of the box and the ground is y = 0, so a box sits at y = height / 2.
+// Built to match his drawn cards: the hat and hook, the claws, the skull face, the colours.
+const MODELS = {
+  // a fat caterpillar, low to the ground, segments getting smaller toward the tail
+  grasslet: [
+    [0, .22, .30, .40, .40, .40, '#6fbf4a'], [0, .20, -.02, .36, .36, .36, '#5aad3a'],
+    [0, .17, -.30, .30, .30, .30, '#6fbf4a'], [0, .14, -.54, .24, .24, .24, '#5aad3a'],
+    [-.11, .30, .50, .07, .07, .07, '#14202e'], [.11, .30, .50, .07, .07, .07, '#14202e'],
+    [0, .44, .30, .05, .14, .05, '#3f8f2a'],
+  ],
+  // the pirate: floppy hat, X over one eye, a hook for one hand
+  pirate: [
+    [0, .38, 0, .46, .76, .34, '#a33c2e'],                     // body
+    [0, .92, 0, .40, .34, .34, '#c0553f'],                     // head
+    [0, 1.13, 0, .86, .10, .60, '#5e2118'],                    // hat brim
+    [0, 1.24, 0, .40, .16, .30, '#7d2d22'],                    // hat crown
+    [-.11, .95, .18, .09, .09, .03, '#14202e'],                // eye
+    [.12, .95, .18, .13, .04, .03, '#14202e'], [.12, .95, .18, .04, .13, .03, '#14202e'], // the X
+    [-.31, .52, 0, .16, .46, .16, '#a33c2e'], [.31, .52, 0, .16, .46, .16, '#a33c2e'],    // arms
+    [.33, .25, .04, .09, .22, .09, '#c9ccd6'], [.40, .17, .04, .18, .08, .08, '#c9ccd6'], // the hook
+    [-.13, .07, 0, .16, .18, .22, '#5e2118'], [.13, .07, 0, .16, .18, .22, '#5e2118'],
+  ],
+  // brown hat, green face in sunglasses, blue body
+  taco: [
+    [0, .40, 0, .50, .80, .36, '#2f6bb5'],
+    [0, .94, 0, .44, .34, .34, '#3f9a3f'],
+    [0, 1.14, 0, .62, .10, .52, '#6d4420'],
+    [0, 1.23, 0, .34, .14, .30, '#7d5228'],
+    [-.11, .97, .18, .12, .09, .03, '#14202e'], [.11, .97, .18, .12, .09, .03, '#14202e'],
+    [0, .97, .18, .12, .03, .03, '#14202e'],
+    [-.33, .54, 0, .16, .44, .16, '#8b5fd6'], [.33, .54, 0, .16, .44, .16, '#e0b080'],
+    [-.13, .08, 0, .17, .20, .22, '#1f4a80'], [.13, .08, 0, .17, .20, .22, '#1f4a80'],
+  ],
+  // a crab standing up: wide flat head, two claws in the air, and pants with a belt
+  crab: [
+    [0, .46, 0, .62, .46, .40, '#d0472f'],                     // body
+    [0, .86, 0, .76, .30, .36, '#e05a3c'],                     // wide flat head
+    [-.22, .90, .19, .10, .10, .03, '#f4efe2'], [.22, .90, .19, .10, .10, .03, '#f4efe2'],
+    [-.22, .90, .21, .05, .05, .03, '#14202e'], [.22, .90, .21, .05, .05, .03, '#14202e'],
+    [-.46, .74, 0, .16, .46, .16, '#d0472f'], [.46, .74, 0, .16, .46, .16, '#d0472f'],  // arms up
+    [-.50, 1.04, 0, .26, .28, .22, '#e8664a'], [.50, 1.04, 0, .26, .28, .22, '#e8664a'], // claws
+    [-.50, 1.14, .08, .26, .08, .10, '#b93a24'], [.50, 1.14, .08, .26, .08, .10, '#b93a24'],
+    [0, .20, 0, .58, .22, .38, '#2f6bb5'],                     // pants
+    [0, .30, 0, .60, .09, .40, '#3a2c18'],                     // belt
+    [-.15, .05, 0, .18, .12, .22, '#2f6bb5'], [.15, .05, 0, .18, .12, .22, '#2f6bb5'],
+  ],
+  // the robot, built from the coloured blocks on Asher's card
+  mech: [
+    [0, 1.00, 0, .46, .40, .38, '#3a3f4a'],                    // head
+    [-.12, 1.02, .20, .11, .11, .03, '#e23b2e'], [.12, 1.02, .20, .11, .11, .03, '#e23b2e'],
+    [0, .70, 0, .54, .28, .36, '#7b3fc6'],                     // body blocks
+    [0, .46, 0, .54, .24, .36, '#2f8f3f'],
+    [0, .26, 0, .50, .20, .34, '#e08a2a'],
+    [-.40, .66, 0, .22, .22, .22, '#2f6bb5'], [.40, .66, 0, .22, .22, .22, '#2f6bb5'],
+    [-.44, .40, 0, .18, .34, .18, '#8b8f99'], [.44, .40, 0, .18, .34, .18, '#8b8f99'],
+    [-.15, .07, 0, .20, .16, .24, '#3a3f4a'], [.15, .07, 0, .20, .16, .24, '#3a3f4a'],
+  ],
+  // tall, dark wings, and big green flippers for feet
+  flyer: [
+    [0, .62, 0, .34, .72, .28, '#e0b080'],
+    [0, 1.08, 0, .34, .34, .30, '#e0b080'],
+    [0, 1.20, 0, .36, .18, .34, '#2f3540'],                    // dark hood
+    [-.08, 1.10, .16, .06, .09, .03, '#14202e'], [.08, 1.10, .16, .06, .09, .03, '#14202e'],
+    [-.34, .72, -.04, .24, .62, .12, '#2f3540'], [.34, .72, -.04, .24, .62, .12, '#2f3540'], // wings
+    [-.44, .50, -.06, .16, .40, .10, '#404856'], [.44, .50, -.06, .16, .40, .10, '#404856'],
+    [-.13, .09, .10, .22, .18, .44, '#2f8f3f'], [.13, .09, .10, .22, .18, .44, '#2f8f3f'],  // flippers
+  ],
+  // the big one: a dark skull face and bright blocks for arms and legs
+  rage: [
+    [0, 1.12, 0, .64, .54, .44, '#2b3038'],                    // skull head
+    [-.15, 1.18, .23, .15, .18, .03, '#f4efe2'], [.15, 1.18, .23, .15, .18, .03, '#f4efe2'],
+    [0, .97, .23, .40, .10, .03, '#f4efe2'],                   // teeth
+    [-.34, 1.26, 0, .16, .22, .16, '#2b3038'], [.34, 1.26, 0, .16, .22, .16, '#2b3038'],
+    [-.34, 1.26, .06, .07, .18, .06, '#f07a1e'], [.34, 1.26, .06, .07, .18, .06, '#f07a1e'],
+    [0, .66, 0, .50, .38, .36, '#7b3fc6'],                     // torso
+    [0, .40, 0, .46, .22, .34, '#e0a060'],
+    [-.46, .72, 0, .34, .26, .26, '#d02a22'], [.46, .72, 0, .34, .26, .26, '#d02a22'],  // big red arms
+    [-.18, .12, 0, .30, .26, .28, '#2f7d3a'], [.18, .12, 0, .30, .26, .28, '#2f7d3a'],  // green legs
+  ],
+};
+// Rage Monster Junior is a mini copy of the big one, but green and blue — Asher's words.
+MODELS.ragejr = MODELS.rage.map(([x, y, z, w, h, d, c]) => {
+  const swap = { '#d02a22': '#2f8f8f', '#f07a1e': '#2f6bb5', '#7b3fc6': '#2f8f3f',
+                 '#e0a060': '#6fbf4a', '#2f7d3a': '#2f6bb5' };
+  return [x * .72, y * .72, z * .72, w * .72, h * .72, d * .72, swap[c] || c];
+});
+
+const creatureBox = new THREE.BoxGeometry(1, 1, 1);
+function buildCreature(id, size) {
+  const parts = MODELS[id];
+  if (!parts) return null;
+  const g = new THREE.Group();
+  const mesh = new THREE.InstancedMesh(creatureBox, mat(), parts.length);
+  parts.forEach(([x, y, z, w, h, d, c], i) => {
+    dummy.position.set(x, y, z); dummy.rotation.set(0, 0, 0); dummy.scale.set(w, h, d);
+    dummy.updateMatrix(); mesh.setMatrixAt(i, dummy.matrix);
+    mesh.setColorAt(i, new THREE.Color(c));
+  });
+  g.add(mesh);
+  const s = (size || 1.3) / 1.3;        // the models are drawn about 1.3 blocks tall
+  g.scale.setScalar(s);
+  return g;
+}
+
 function emojiSprite(ch, size) {
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: emojiTexture(ch), transparent: true }));
   s.center.set(0.5, 0.04); s.scale.set(size, size, 1); return s;
@@ -695,7 +802,7 @@ function tapAt(x, y) { // a quick tap on the Octomon
   if (scene !== 'play' || !creature || meeting || creature.popT < 0.2) return;
   ndc.set(x / innerWidth * 2 - 1, -(y / innerHeight) * 2 + 1);
   ray.setFromCamera(ndc, camera);
-  const hits = ray.intersectObject(creature.sprite);
+  const hits = ray.intersectObject(creature.sprite, true);
   const near = projectedDistance(creature.sprite, x, y) < 70; // a thumb is bigger than a sprite edge
   if (hits.length || near) meet();
 }
@@ -718,7 +825,7 @@ let caught = new Set();
 let levels = {};        // id -> level. Catching one you already have levels it up.
 let missed = new Set(); // the ones that got away: seen, escaped, not yet caught.
 let coins = 0, sand = 0, hasCar = false, evolved = false;
-const money = n => '$' + n.toFixed(2);
+const money = n => n.toFixed(2) + ' Octo Money';   // Asher named the money
 const blankPlayer = (name, sk) => ({
   name, skin: sk || SKINS[0], caught: [], levels: {}, missed: [],
   coins: 0, sand: 0, car: false, evolved: false, balls: CONFIG.balls,
@@ -1001,11 +1108,12 @@ function roll(cell) {
 function spawnCreature(x, z, cell) {
   const d = roll(cell);
   if (!d) return;                       // nothing lives in this cover yet
-  const sprite = emojiSprite(d.sprite, tune.creatureSize);
+  const model = buildCreature(d.id, tune.creatureSize);
+  const sprite = model || emojiSprite(d.sprite, tune.creatureSize);
   const shadow = blobShadow();
   sprite.position.set(x, 0, z); shadow.position.set(x, 0.02, z);
   scene3.add(sprite, shadow);
-  creature = { d, x, z, sprite, shadow, t: 0, popT: 0 };
+  creature = { d, x, z, sprite, shadow, t: 0, popT: 0, model: !!model };
   toast(`A wild <b>${d.name}</b> appears! Tap it.`);
   events.push({ type: 'appear', id: d.id, step: Math.round(state.t / STEP) });
 }
@@ -1545,12 +1653,19 @@ function drawFrame() {
   if (creature) {
     const c = creature, pop = c.popT < 1 ? Math.sin(c.popT * Math.PI * 0.75) / Math.sin(Math.PI * 0.75) : 1;
     const b = Math.sin(c.t * tune.breathRate * 2);
-    const s = tune.creatureSize * Math.max(0.01, pop);
-    c.sprite.scale.set(s * (1 - b * 0.02), s * (1 + b * 0.04), 1);
-    c.sprite.position.y = (b * 0.5 + 0.5) * 0.12;
+    if (c.model) {
+      const s = Math.max(0.01, pop) * (tune.creatureSize / 1.3);
+      c.sprite.scale.set(s * (1 - b * 0.03), s * (1 + b * 0.05), s * (1 - b * 0.03));
+      c.sprite.position.y = (b * 0.5 + 0.5) * 0.05;
+      c.sprite.rotation.y = Math.atan2(P.x - c.x, P.z - c.z) + Math.sin(c.t * 0.9) * 0.12;
+    } else {
+      const s = tune.creatureSize * Math.max(0.01, pop);
+      c.sprite.scale.set(s * (1 - b * 0.02), s * (1 + b * 0.04), 1);
+      c.sprite.position.y = (b * 0.5 + 0.5) * 0.12;
+    }
   }
   if (scene === 'figures') {
-    camera.position.set(wx(START.x), 1.6, wx(START.z) + 5); camera.lookAt(wx(START.x), 0.9, wx(START.z) - 1);
+    camera.position.set(wx(START.x) - 0.9, 3.4, wx(START.z) + 11); camera.lookAt(wx(START.x) - 0.9, 0.7, wx(START.z) - 1);
   } else {
     camera.position.set(lerp(C.px, C.x, a), lerp(C.py, C.y, a), lerp(C.pz, C.z, a));
     camera.lookAt(x, 1.0, z);
@@ -1574,6 +1689,7 @@ function timer() { if (document.visibilityState === 'visible' && clock.now() - l
 // ---- What a check can read and drive (?manual=1 stops the loop; players never see it) ----
 window.__door = () => ({ x: DOOR.x, z: DOOR.z, cooldown: shopCooldown });
 window.__wallet = () => ({ coins, sand, car: hasCar, evolved, balls });
+window.__modelInfo = () => creature && ({ id: creature.d.id, model: creature.model, boxes: MODELS[creature.d.id] ? MODELS[creature.d.id].length : 0 });
 window.__spent = () => [...spent];
 window.__battle = () => ({ mine: mine && { id: mine.id, lv: mine.lv, hp: mine.hp, maxHp: mine.maxHp, atk: mine.atk }, foeHp: foe && foe.hp });
 window.__sendOut = id => sendOut(id);
@@ -1603,7 +1719,12 @@ window.game = {
     const d = POOL.find(p => p.id === id); if (!d) return false;
     if (creature) removeCreature();
     spawnCreature(P.x + P.fx * dist, P.z + P.fz * dist, d.tiles[0]);
-    if (creature) { creature.d = d; creature.sprite.material.map = emojiTexture(d.sprite); creature.popT = 1; }
+    if (creature) {
+      scene3.remove(creature.sprite);
+      const m = buildCreature(d.id, tune.creatureSize) || emojiSprite(d.sprite, tune.creatureSize);
+      m.position.set(creature.x, 0, creature.z); scene3.add(m);
+      creature.d = d; creature.sprite = m; creature.model = !!MODELS[d.id]; creature.popT = 1;
+    }
     return !!creature;
   },
   step(n = 1, draw = true, alpha = 1) {
@@ -1623,11 +1744,22 @@ reset();
 scene = params.get('scene') || 'title';
 if (scene === 'title') showTitle();
 if (scene === 'play') startPlay();
-if (scene === 'figures') { // every Octomon in the test and the player, in play's look
-  POOL.forEach((d, i) => { const s = emojiSprite(d.sprite, tune.creatureSize); s.position.set(wx(START.x) - 3 + i * 2, 0, wx(START.z) - 1); scene3.add(s); });
-  P.x = P.px = wx(START.x) + 3; P.z = P.pz = wx(START.z) - 1;
-  camera.position.set(wx(START.x), 1.6, wx(START.z) + 5);
-  scenes.figures.update = dt => { state.t += dt; };
+if (scene === 'figures') { // every Octomon side by side, in play's look — for checking the models
+  const line = [...POOL.map(d => d.id), 'ragejr'];
+  const figs = [];
+  line.forEach((id, i) => {
+    const m = buildCreature(id, tune.creatureSize) || emojiSprite('❓', tune.creatureSize);
+    m.position.set(wx(START.x) - 7 + i * 1.75, 0, wx(START.z) - 1);
+    scene3.add(m); figs.push(m);
+    const sh = blobShadow(); sh.position.copy(m.position); sh.position.y = 0.02; scene3.add(sh);
+  });
+  P.x = P.px = wx(START.x) + 9; P.z = P.pz = wx(START.z) - 1;   // player out of the way
+  camera.position.set(wx(START.x) - 0.9, 3.4, wx(START.z) + 11);
+  camera.lookAt(wx(START.x) - 0.9, 0.7, wx(START.z) - 1);
+  scenes.figures.update = dt => {
+    state.t += dt;
+    figs.forEach((m, i) => { m.rotation.y = state.t * 0.5 + i * 0.3; });   // turn slowly so all sides show
+  };
 }
 last = clock.now();
 if (params.get('manual') === '1') drawFrame();
