@@ -1,3 +1,31 @@
+  // Mr. Flyer, rebuilt as a proper bird: feathers, a beak, and wings that flap.
+  flyer: [
+    [0, .64, 0, .34, .56, .30, '#7a5a3c'],                     // body
+    [0, .56, .17, .22, .36, .05, '#e8d6b4'],                   // pale chest
+    // rows of feathers down the back, each row a little shorter — this is the "feathers" bit
+    [0, .84, -.15, .32, .10, .06, '#5e4126'], [0, .73, -.17, .28, .10, .06, '#6b4b2d'],
+    [0, .62, -.18, .24, .10, .06, '#5e4126'], [0, .51, -.17, .20, .10, .06, '#6b4b2d'],
+    [0, 1.02, 0, .30, .28, .28, '#8a6743'],                    // head
+    [0, 1.16, 0, .28, .08, .24, '#5e4126'],                    // crown of dark feathers
+    [-.09, 1.11, -.09, .08, .09, .08, '#5e4126'], [.09, 1.11, -.09, .08, .09, .08, '#5e4126'],
+    [-.08, 1.05, .14, .10, .10, .04, '#f4efe2'], [.08, 1.05, .14, .10, .10, .04, '#f4efe2'], // eyes
+    [-.08, 1.05, .16, .055, .055, .04, '#14202e'], [.08, 1.05, .16, .055, .055, .04, '#14202e'],
+    [0, .98, .17, .11, .09, .10, '#f2a63b'],                   // the beak Asher asked for,
+    [0, .945, .24, .07, .06, .08, '#d8821f'],                  // hooked down at the tip
+    [-.08, .22, .03, .07, .22, .07, '#d8821f'], [.08, .22, .03, .07, .22, .07, '#d8821f'], // legs
+    [-.08, .06, .06, .13, .10, .28, '#f2a63b'], [.08, .06, .06, .13, .10, .28, '#f2a63b'], // talons
+    [0, .40, -.26, .18, .12, .24, '#6b4b2d'],                  // tail feathers
+    [0, .36, -.40, .14, .08, .20, '#5e4126'],
+    // the wings: four feather rows each, in their own group so they can flap
+    [-.38, .80, .02, .36, .12, .24, '#6b4b2d', 'wingL'],
+    [-.44, .70, 0, .40, .11, .21, '#7a5a3c', 'wingL'],
+    [-.48, .60, -.03, .38, .10, .18, '#5e4126', 'wingL'],
+    [-.68, .53, -.05, .22, .08, .14, '#8a6743', 'wingL'],
+    [.38, .80, .02, .36, .12, .24, '#6b4b2d', 'wingR'],
+    [.44, .70, 0, .40, .11, .21, '#7a5a3c', 'wingR'],
+    [.48, .60, -.03, .38, .10, .18, '#5e4126', 'wingR'],
+    [.68, .53, -.05, .22, .08, .14, '#8a6743', 'wingR'],
+  ],
 <!doctype html>
 <!-- PROTOTYPE - NOT FOR PRODUCTION -->
 <!-- Question: Does a 3D walkable world feel better on a phone than the 2D grid? -->
@@ -90,6 +118,8 @@
 
   /* ---- encounter: the 2D build's screen, ported (prototypes/octomon/index.html) ---- */
   #fight .panel { text-align:left; max-height:100%; overflow-y:auto; }
+  /* the index got taller when it grew types, so let it scroll on a phone */
+  #logScreen .panel { max-height:100%; overflow-y:auto; max-width:560px; }
   #fight .panel.quake { animation:quake .45s; }
   @keyframes quake{
     0%,100%{transform:translate(0,0);} 15%{transform:translate(-7px,4px);}
@@ -142,6 +172,25 @@
     background:var(--edge); color:var(--bone); border:none; border-bottom:3px solid #212a4a; cursor:pointer;}
   #logBtn b{color:var(--amber);}
   .logTitle{font-family:var(--display); font-size:19px; color:var(--amber); text-align:center; margin:0 0 12px;}
+  /* GOTCHA! — big, in front of everything, for about two seconds */
+  #gotcha{position:fixed; inset:0; z-index:40; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; pointer-events:none; text-align:center;}
+  #gotcha .word{font-family:var(--display); font-size:clamp(44px, 13vw, 104px); line-height:1;
+    color:var(--amber); text-shadow:0 6px 0 #7a4a06, 0 0 36px rgba(240,170,60,.75);
+    -webkit-text-stroke:3px #2b1c05;}
+  #gotcha .who{font-family:var(--display); font-size:clamp(13px, 3.4vw, 20px); margin-top:14px;
+    color:#f4efe2; text-shadow:0 2px 0 #000, 0 0 14px rgba(0,0,0,.9);}
+  /* the pop is decoration only: the resting state is already the visible one, so a dropped
+     frame or a stalled animation on a tired iPad still leaves GOTCHA! on the screen */
+  #gotcha.go .word{animation:gotchaPop .62s cubic-bezier(.2,1.5,.4,1);}
+  #gotcha.go .who{animation:gotchaUp .5s;}
+  /* starts at .8, not at nothing: if the animation clock stalls — and under a busy 3D loop it
+     does — the word is still big and readable rather than a speck in the middle of the screen */
+  @keyframes gotchaPop{ 0%{transform:scale(.8) rotate(-7deg);}
+    55%{transform:scale(1.12) rotate(3deg);} 100%{transform:none;} }
+  @keyframes gotchaUp{ from{transform:translateY(14px); opacity:.2;} to{transform:none; opacity:1;} }
+  @media (prefers-reduced-motion:reduce){ #gotcha.go .word, #gotcha.go .who{animation:none;} }
+
   .cards{display:grid; grid-template-columns:repeat(4,1fr); gap:8px;}
   @media (max-width:480px){ .cards{grid-template-columns:repeat(3,1fr);} }
   .card{background:var(--ink); border:2px solid #3b4a7a; border-radius:10px; padding:8px 4px; text-align:center;}
@@ -152,6 +201,18 @@
   .card .s{font-size:26px; line-height:1.1;}
   .card .n{font-family:var(--display); font-size:10px; margin-top:4px; word-break:break-word;}
   .card .r{font-size:9px; color:var(--muted);}
+  .card .w{font-size:8px; color:var(--muted); opacity:.75; margin-top:2px; line-height:1.25;}
+  .card.soon{border-style:dashed; border-color:#5a4a7a; opacity:.8;}
+  .soonHead{margin:10px 0 4px; font-size:10px; letter-spacing:.06em; text-transform:uppercase;}
+  /* type chips — Asher picked the types, each gets its own colour */
+  .chips{display:flex; flex-wrap:wrap; gap:3px; justify-content:center; margin:4px 0 2px;}
+  .ty{font-size:8px; line-height:1; padding:3px 5px; border-radius:999px;
+      background:color-mix(in srgb, var(--ty, #666) 30%, #11101c); border:1px solid var(--ty, #666);
+      color:#f4efe2; white-space:nowrap;}
+  .ty.every{--ty:#d1365a; background:linear-gradient(90deg,#e4572e,#d9a521,#3f9b4f,#2f7fd1,#9a5fd0);
+            border-color:#f4efe2; color:#14121f; font-family:var(--display);}
+  .ty.gone{opacity:.7; text-decoration:line-through;}
+  .ty.todo{--ty:#6b7a8f; font-style:italic;}
 
   /* the shop and the Hypercar */
   #carBtn{position:fixed; top:calc(52px + env(safe-area-inset-top,0px)); right:10px; z-index:6;
@@ -279,11 +340,19 @@
 </div>
 
 <!-- OCTO LOG: what you have caught, and the slots still empty -->
+<!-- GOTCHA! — Asher's, so you know for sure you actually caught it -->
+<div id="gotcha" class="hide" aria-live="polite">
+  <div class="word">GOTCHA!</div>
+  <div class="who" id="gotchaWho"></div>
+</div>
+
 <div id="logScreen" class="cover hide">
   <div class="panel">
-    <h2 class="logTitle" id="logHeading">OCTO LOG</h2>
+    <h2 class="logTitle" id="logHeading">OCTOMON INDEX</h2>
     <div id="cards" class="cards"></div>
     <p class="sub" id="logNote"></p>
+    <p class="sub soonHead">Designed, but not in the game yet</p>
+    <div id="soon" class="cards"></div>
     <button class="primary" id="logClose">Back to the world</button>
   </div>
 </div>
@@ -364,24 +433,68 @@ const $ = id => document.getElementById(id);
 // 2D build (prototypes/octomon/index.html). Grasslet is the common placeholder, as there.
 // LOG_SLOTS is 8: the roster below fills 7, and the last slot is Asher's to design.
 // hp / base / weight / move come from the 2D build's DEX; tiles are the encounter tiles below.
+// The types. Asher named these on 22 Nov: "fire, water, grass, rock, psychic, electric",
+// then "one more I forgot — fighting". Taco is his too, invented on the spot for Tacoman.
+// Mech, flying and bug came out of the creatures themselves, and Rage Power is the one the
+// big Rage Monster has and Junior does not — not until he takes the wristband.
+const TYPES = {
+  fire:     { name:'Fire',       icon:'🔥', col:'#e4572e' },
+  water:    { name:'Water',      icon:'💧', col:'#2f7fd1' },
+  grass:    { name:'Grass',      icon:'🌿', col:'#3f9b4f' },
+  rock:     { name:'Rock',       icon:'🪨', col:'#8a7a63' },
+  psychic:  { name:'Psychic',    icon:'🔮', col:'#9a5fd0' },
+  electric: { name:'Electric',   icon:'⚡', col:'#d9a521' },
+  fighting: { name:'Fighting',   icon:'🥊', col:'#b23a48' },
+  taco:     { name:'Taco',       icon:'🌮', col:'#d98b2b' },
+  mech:     { name:'Mech',       icon:'⚙️', col:'#6b7a8f' },
+  flying:   { name:'Flying',     icon:'🪽', col:'#6aa9d8' },
+  bug:      { name:'Bug',        icon:'🐛', col:'#7c9a3f' },
+  rage:     { name:'Rage Power', icon:'💢', col:'#d1365a' },
+};
+const ALL_TYPES = Object.keys(TYPES);
+// what to show for one Octomon: a list of type ids, or null when nobody has decided yet
+function typesOf(d) {
+  if (!d) return [];
+  if (d.everyType) return ALL_TYPES.filter(t => !(d.exceptType || []).includes(t));
+  return d.types || [];
+}
+// "Fighting + Water", or "Every type" when it is the whole list
+function typeLine(d) {
+  const t = typesOf(d);
+  if (!t.length) return 'Type not decided yet';
+  if (t.length === ALL_TYPES.length) return 'EVERY TYPE';
+  if (d.everyType) return 'EVERY TYPE but ' + (d.exceptType || []).map(x => TYPES[x].name).join(' and ');
+  return t.map(x => TYPES[x].name).join(' + ');
+}
+
 const POOL = [
-  { id:'grasslet', pay:2, name:'Grasslet',        sprite:'🐛', biome:'Grasslands',        rarity:'2/10',
-    tiles:['H'],          weight:38, hp:16, base:0.34 },
-  { id:'pirate', pay:5,   name:'St. Pirate',      sprite:'🏴‍☠️', biome:'Fighting + Water',  rarity:'5/10',
-    tiles:['S'],          weight:20, hp:26, base:0.24, move:'hook' },
-  { id:'taco', pay:9,     name:'Tacoman',         sprite:'🌮', biome:'2 biomes',          rarity:'10/10',
-    tiles:['H','S'],      weight:7,  hp:30, base:0.16, move:'taco' },
-  { id:'crab', pay:10,     name:'Mr. Crab Pants',  sprite:'🦀', biome:'Beach + Builder',   rarity:'10/10',
-    tiles:['S'],          weight:6,  hp:32, base:0.15, move:'wall' },
-  { id:'mech', pay:10,     name:'Mech',            sprite:'🤖', biome:'Blocky',            rarity:'10/10',
-    tiles:['B'],          weight:22, hp:34, base:0.14, move:'blast' },
-  { id:'flyer', pay:14,    name:'Mr. Flyer',       sprite:'🦅', biome:'Unknown — anywhere', rarity:'12/10',
-    tiles:['H','S','B','F'], weight:2, hp:34, base:0.10, move:'bomb' },
-  { id:'swoopy', pay:4,    name:'Swoopy',          sprite:'🦇', biome:"Harper's — the sky", rarity:'4/10',
-    tiles:['H','B'],      weight:14, hp:18, base:0.30 },
-  { id:'rage', pay:20,     name:'Rage Monster',    sprite:'🤼', biome:'Forest',            rarity:'RAREST',
-    tiles:['F'],          weight:4,  hp:40, base:0.08, move:'wrestle', lastOne:true },
+  { id:'grasslet', pay:2,  name:'Grasslet',       sprite:'🐛', types:['grass','bug'],      rarity:'2/10',
+    tiles:['H'],             weight:38, hp:16, base:0.34 },
+  { id:'swoopy', pay:4,    name:'Swoopy',         sprite:'🦇', types:[],                   rarity:'4/10',
+    tiles:['H','B'],         weight:14, hp:18, base:0.30 },
+  { id:'pirate', pay:5,    name:'St. Pirate',     sprite:'🏴‍☠️', types:['fighting','water'], rarity:'5/10',
+    tiles:['S'],             weight:20, hp:26, base:0.24, move:'hook' },
+  { id:'taco', pay:9,      name:'Tacoman',        sprite:'🌮', types:['taco','rock'],      rarity:'10/10',
+    tiles:['H','S'],         weight:7,  hp:30, base:0.16, move:'taco' },
+  { id:'crab', pay:10,     name:'Mr. Crab Pants', sprite:'🦀', types:['rock','fighting'],  rarity:'10/10',
+    tiles:['S'],             weight:6,  hp:32, base:0.15, move:'wall' },
+  { id:'mech', pay:10,     name:'Mech',           sprite:'🤖', types:['mech','fighting'],  rarity:'10/10',
+    tiles:['B'],             weight:22, hp:34, base:0.14, move:'blast' },
+  { id:'flyer', pay:14,    name:'Mr. Flyer',      sprite:'🦅', types:['flying','water'],   rarity:'12/10',
+    tiles:['H','S','B','F'], weight:2,  hp:34, base:0.10, move:'bomb' },
+  { id:'rage', pay:20,     name:'Rage Monster',   sprite:'🤼', everyType:true,             rarity:'RAREST',
+    tiles:['F'],             weight:4,  hp:40, base:0.08, move:'wrestle', lastOne:true },
 ];
+// Rage Monster Junior is designed but not findable yet, so he sits below the log as a promise
+// rather than an empty slot. Asher: every type EXCEPT Rage Power, until he takes the wristband.
+const COMING = [
+  { id:'ragejr', pay:16, name:'Rage Monster Jr.', sprite:'🤼', everyType:true, exceptType:['rage'],
+    rarity:'2nd rarest', tiles:['B'], soon:'Blocky Blocklands, once you have caught any four' },
+];
+// where each one lives, worked out from its encounter tiles
+const HOME = { H:'Grass Apocalypse', S:'Beach Layer', B:'Blocky Blocklands', F:'The Deep Dark Forest' };
+const homeOf = d => (d.tiles || []).length >= 4 ? 'Anywhere' : (d.tiles || []).map(t => HOME[t]).join(' and ');
+
 const LOG_SLOTS = 8;
 const SAND_TO_EVOLVE = 8;   // eight, because Octomon
 
@@ -675,13 +788,13 @@ const MODELS = {
   // a beard, a gold belt buckle, turned-down boots, and the hook out on a longer arm. Nothing
   // on his card changed: the X is still over one eye, and the hook is still the throwing hand.
   pirate: [
-    [0, .50, 0, .64, .50, .42, '#8e2f24'],                     // barrel chest — wide, not tall
-    [0, .60, .21, .16, .34, .04, '#d8c9a8'],                   // the open front of his coat
-    [0, .24, 0, .62, .20, .42, '#8e2f24'],                     // hips
-    [0, .34, 0, .68, .11, .44, '#2b1c10'],                     // belt
-    [0, .34, .23, .15, .13, .04, '#e8c04a'],                   // gold buckle
+    [0, .62, 0, .64, .44, .42, '#8e2f24'],                     // barrel chest — wide, not tall
+    [0, .66, .21, .16, .30, .04, '#d8c9a8'],                   // the open front of his coat
+    [0, .32, 0, .58, .16, .40, '#8e2f24'],                     // hips
+    [0, .44, 0, .68, .11, .44, '#2b1c10'],                     // belt
+    [0, .44, .23, .15, .13, .04, '#e8c04a'],                   // gold buckle
     [0, .86, 0, .38, .30, .32, '#d08a68'],                     // head
-    [0, .73, .12, .29, .17, .18, '#2b2018'],                   // beard
+    [0, .79, .13, .28, .16, .17, '#2b2018'],                   // beard
     [-.10, .92, .17, .08, .08, .03, '#14202e'],                // one good eye
     [.12, .92, .17, .14, .04, .03, '#14202e'], [.12, .92, .17, .04, .14, .03, '#14202e'], // the X
     [0, 1.04, 0, .90, .08, .54, '#1d1a26'],                    // three-corner hat: the flat brim
@@ -689,14 +802,19 @@ const MODELS = {
     [0, 1.11, -.24, .30, .09, .14, '#1d1a26'],                 // and the third, at the back
     [0, 1.13, 0, .34, .14, .28, '#1d1a26'],                    // crown
     [0, 1.13, .15, .11, .11, .03, '#f4efe2'],                  // the skull on the front
-    [-.38, .60, 0, .16, .34, .16, '#8e2f24'],                  // left arm
-    [-.38, .40, 0, .18, .09, .18, '#d8c9a8'],                  // its cuff
-    [.42, .62, .06, .16, .30, .16, '#8e2f24'],                  // the hook arm, held out
-    [.42, .44, .06, .18, .09, .18, '#d8c9a8'],
-    [.42, .33, .06, .08, .16, .08, '#c9ccd6'], [.47, .24, .06, .20, .08, .08, '#c9ccd6'],
-    [.56, .30, .06, .07, .14, .08, '#c9ccd6'],                 // the curve of the hook
-    [-.16, .09, .02, .22, .18, .28, '#2b1c10'], [.16, .09, .02, .22, .18, .28, '#2b1c10'], // boots
-    [-.16, .20, 0, .24, .09, .26, '#3d2a17'], [.16, .20, 0, .24, .09, .26, '#3d2a17'],     // turned-down tops
+    [-.38, .66, 0, .16, .34, .16, '#8e2f24'],                  // left arm
+    [-.38, .47, 0, .18, .09, .18, '#d8c9a8'],                  // its cuff
+    [.42, .68, .06, .16, .30, .16, '#8e2f24'],                 // the hook arm, held out
+    [.42, .51, .06, .18, .09, .18, '#d8c9a8'],
+    [.42, .40, .06, .08, .16, .08, '#c9ccd6'], [.47, .31, .06, .20, .08, .08, '#c9ccd6'],
+    [.56, .37, .06, .07, .14, .08, '#c9ccd6'],                 // the curve of the hook
+    [-.17, .09, .02, .21, .18, .27, '#2b1c10'],                // the one real boot
+    [-.17, .22, 0, .23, .09, .25, '#3d2a17'],                  // its turned-down top
+    // Asher, asked what else would make him a real pirate: "A peg leg. And yeah, that's it."
+    [.17, .22, 0, .21, .09, .21, '#3d2a17'],                   // the strap it buckles into,
+    [.17, .13, 0, .14, .13, .14, '#8a6436'],                   // the top of the wooden leg,
+    [.17, .045, 0, .095, .11, .095, '#8a6436'],                // tapering down,
+    [.17, .015, 0, .14, .04, .14, '#5e4425'],                  // to the foot of it
   ],
   // SWOOPY — Harper's, and the first one that isn't Asher's. She is six and told me only that
   // it flies and is a bird or a bat, so this is a draft and the colours are a guess: she picks
@@ -750,19 +868,39 @@ const MODELS = {
     [-.15, .07, 0, .20, .16, .24, '#3a3f4a'], [.15, .07, 0, .20, .16, .24, '#3a3f4a'],
   ],
   // tall, dark wings, and big green flippers for feet
+  // Mr. Flyer, rebuilt as a proper bird: feathers, a beak, and wings that flap.
   flyer: [
-    [0, .62, 0, .34, .72, .28, '#e0b080'],
-    [0, 1.08, 0, .34, .34, .30, '#e0b080'],
-    [0, 1.20, 0, .36, .18, .34, '#2f3540'],                    // dark hood
-    [-.08, 1.10, .16, .06, .09, .03, '#14202e'], [.08, 1.10, .16, .06, .09, .03, '#14202e'],
-    [-.34, .72, -.04, .24, .62, .12, '#2f3540'], [.34, .72, -.04, .24, .62, .12, '#2f3540'], // wings
-    [-.44, .50, -.06, .16, .40, .10, '#404856'], [.44, .50, -.06, .16, .40, .10, '#404856'],
-    [-.13, .09, .10, .22, .18, .44, '#2f8f3f'], [.13, .09, .10, .22, .18, .44, '#2f8f3f'],  // flippers
+    [0, .62, 0, .36, .60, .30, '#7a5a3c'],                     // body
+    [0, .52, .17, .24, .40, .05, '#e8d6b4'],                   // pale chest
+    // rows of feathers down the back, each row a little shorter — this is the "feathers" bit
+    [0, .86, -.14, .34, .10, .06, '#5e4126'], [0, .74, -.16, .30, .10, .06, '#6b4b2d'],
+    [0, .62, -.17, .26, .10, .06, '#5e4126'], [0, .50, -.17, .22, .10, .06, '#6b4b2d'],
+    [0, 1.02, 0, .32, .30, .30, '#8a6743'],                    // head
+    [0, 1.17, 0, .30, .10, .26, '#5e4126'],                    // crown of dark feathers
+    [-.10, 1.12, -.08, .09, .10, .09, '#5e4126'], [.10, 1.12, -.08, .09, .10, .09, '#5e4126'],
+    [-.09, 1.05, .15, .11, .11, .04, '#f4efe2'], [.09, 1.05, .15, .11, .11, .04, '#f4efe2'], // eyes
+    [-.09, 1.05, .17, .06, .06, .04, '#14202e'], [.09, 1.05, .17, .06, .06, .04, '#14202e'],
+    [0, .98, .19, .12, .09, .10, '#f2a63b'],                   // the beak Asher asked for,
+    [0, .94, .25, .07, .06, .09, '#d8821f'],                   // hooked down at the tip
+    [-.08, .07, .06, .13, .14, .30, '#f2a63b'], [.08, .07, .06, .13, .14, .30, '#f2a63b'], // talons
+    [0, .36, -.26, .18, .12, .26, '#6b4b2d'],                  // tail feathers
+    [0, .32, -.40, .14, .08, .20, '#5e4126'],
+    // the wings: three feather rows each, in their own group so they can flap
+    [-.40, .74, 0, .40, .13, .26, '#6b4b2d', 'wingL'],
+    [-.46, .62, -.02, .44, .12, .22, '#7a5a3c', 'wingL'],
+    [-.50, .50, -.04, .40, .11, .18, '#5e4126', 'wingL'],
+    [-.72, .44, -.05, .22, .09, .14, '#8a6743', 'wingL'],
+    [.40, .74, 0, .40, .13, .26, '#6b4b2d', 'wingR'],
+    [.46, .62, -.02, .44, .12, .22, '#7a5a3c', 'wingR'],
+    [.50, .50, -.04, .40, .11, .18, '#5e4126', 'wingR'],
+    [.72, .44, -.05, .22, .09, .14, '#8a6743', 'wingR'],
   ],
   // the big one: a dark skull face and bright blocks for arms and legs
   rage: [
     [0, 1.12, 0, .64, .54, .44, '#2b3038'],                    // skull head
-    [-.15, 1.18, .23, .15, .18, .03, '#f4efe2'], [.15, 1.18, .23, .15, .18, .03, '#f4efe2'],
+    [-.15, 1.18, .23, .15, .18, .03, '#120f14'], [.15, 1.18, .23, .15, .18, .03, '#120f14'], // sockets
+    [-.15, 1.18, .25, .11, .13, .03, '#ffe44a', 'glow'], [.15, 1.18, .25, .11, .13, .03, '#ffe44a', 'glow'],
+    [-.15, 1.18, .26, .06, .07, .03, '#fffbd0', 'glow'], [.15, 1.18, .26, .06, .07, .03, '#fffbd0', 'glow'],
     [0, .97, .23, .40, .10, .03, '#f4efe2'],                   // teeth
     [-.34, 1.26, 0, .16, .22, .16, '#2b3038'], [.34, 1.26, 0, .16, .22, .16, '#2b3038'],
     [-.34, 1.26, .06, .07, .18, .06, '#f07a1e'], [.34, 1.26, .06, .07, .18, .06, '#f07a1e'],
@@ -773,27 +911,60 @@ const MODELS = {
   ],
 };
 // Rage Monster Junior is a mini copy of the big one, but green and blue — Asher's words.
-MODELS.ragejr = MODELS.rage.map(([x, y, z, w, h, d, c]) => {
+MODELS.ragejr = MODELS.rage.map(([x, y, z, w, h, d, c, flag]) => {
   const swap = { '#d02a22': '#2f8f8f', '#f07a1e': '#2f6bb5', '#7b3fc6': '#2f8f3f',
                  '#e0a060': '#6fbf4a', '#2f7d3a': '#2f6bb5' };
-  return [x * .72, y * .72, z * .72, w * .72, h * .72, d * .72, swap[c] || c];
+  // the glowing yellow eyes carry over to Junior — Asher asked for them on both
+  return [x * .72, y * .72, z * .72, w * .72, h * .72, d * .72, swap[c] || c, flag];
 });
 
 const creatureBox = new THREE.BoxGeometry(1, 1, 1);
+// An eighth value on a part says it is special:
+//   'glow'  — unlit, so it stays bright in shadow. Asher asked for glowing yellow eyes.
+//   'wingL' / 'wingR' — goes in its own group that flaps. Asher asked for flappy wings.
+const glowMat = () => new THREE.MeshBasicMaterial();   // unlit: the colour you give it, always
+function fillMesh(parts, material, pivot) {
+  const mesh = new THREE.InstancedMesh(creatureBox, material, parts.length);
+  parts.forEach(([x, y, z, w, h, d, c], i) => {
+    dummy.position.set(x - (pivot ? pivot[0] : 0), y - (pivot ? pivot[1] : 0), z);
+    dummy.rotation.set(0, 0, 0); dummy.scale.set(w, h, d);
+    dummy.updateMatrix(); mesh.setMatrixAt(i, dummy.matrix);
+    mesh.setColorAt(i, new THREE.Color(c));
+  });
+  return mesh;
+}
 function buildCreature(id, size) {
   const parts = MODELS[id];
   if (!parts) return null;
   const g = new THREE.Group();
-  const mesh = new THREE.InstancedMesh(creatureBox, mat(), parts.length);
-  parts.forEach(([x, y, z, w, h, d, c], i) => {
-    dummy.position.set(x, y, z); dummy.rotation.set(0, 0, 0); dummy.scale.set(w, h, d);
-    dummy.updateMatrix(); mesh.setMatrixAt(i, dummy.matrix);
-    mesh.setColorAt(i, new THREE.Color(c));
+  const body  = parts.filter(p => !p[7]);
+  const glow  = parts.filter(p => p[7] === 'glow');
+  const wingL = parts.filter(p => p[7] === 'wingL');
+  const wingR = parts.filter(p => p[7] === 'wingR');
+  if (body.length) g.add(fillMesh(body, mat()));
+  if (glow.length) g.add(fillMesh(glow, glowMat()));
+  // each wing hangs off a shoulder pivot so it can swing without dragging the body with it
+  const wings = [];
+  [[wingL, -1], [wingR, 1]].forEach(([w, side]) => {
+    if (!w.length) return;
+    const pivot = [side * 0.15, 0.72];          // just outside the shoulder
+    const grp = new THREE.Group();
+    grp.position.set(pivot[0], pivot[1], 0);
+    grp.add(fillMesh(w, mat(), pivot));
+    grp.userData.side = side;
+    g.add(grp); wings.push(grp);
   });
-  g.add(mesh);
+  if (wings.length) g.userData.wings = wings;
   const s = (size || 1.3) / 1.3;        // the models are drawn about 1.3 blocks tall
   g.scale.setScalar(s);
   return g;
+}
+// the flap itself, driven from whatever clock the scene already has
+function flap(model, t) {
+  const w = model && model.userData && model.userData.wings;
+  if (!w) return;
+  const a = Math.sin(t * 5.2) * 0.40;     // enough to read as flapping, not windmilling
+  w.forEach(g => { g.rotation.z = -g.userData.side * a; });
 }
 
 function emojiSprite(ch, size) {
@@ -955,36 +1126,52 @@ function checkEvolve() {
   return true;
 }
 function logCount() { return caught.size; }
+// one row of type chips, in Asher's colours
+function typeChips(d) {
+  const t = typesOf(d);
+  if (!t.length) return '<div class="chips"><span class="ty todo">type not decided</span></div>';
+  if (t.length === ALL_TYPES.length)
+    return '<div class="chips"><span class="ty every">EVERY TYPE</span></div>';
+  if (d.everyType) return '<div class="chips"><span class="ty every">EVERY TYPE</span>' +
+    (d.exceptType || []).map(x => `<span class="ty gone" style="--ty:${TYPES[x].col}">no ${TYPES[x].name}</span>`).join('') + '</div>';
+  return '<div class="chips">' + t.map(x =>
+    `<span class="ty" style="--ty:${TYPES[x].col}">${TYPES[x].icon} ${TYPES[x].name}</span>`).join('') + '</div>';
+}
 function drawLog() {
   const me = players[current];
-  $('logHeading').textContent = me ? me.name.toUpperCase() + "'S OCTO LOG" : 'OCTO LOG';
+  $('logHeading').textContent = me ? me.name.toUpperCase() + "'S OCTOMON INDEX" : 'OCTOMON INDEX';
   const box = $('cards'); box.innerHTML = '';
   POOL.forEach(d => {
     const got = caught.has(d.id);
     const gotAway = !got && missed.has(d.id);
     const el = document.createElement('div');
     el.className = 'card' + (got ? '' : gotAway ? ' away' : ' empty');
-    el.innerHTML = got
-      // caught: its level, which goes up every time you catch that one again
-      ? `<div class="s">${d.sprite}</div><div class="n">${d.name}</div><div class="r">Lv.${levels[d.id] || 1} · ${d.rarity}</div>`
-      // met but never caught: a silhouette, so you know what is still out there
-      : gotAway
-      ? `<div class="s shadow">${d.sprite}</div><div class="n">${d.name}</div><div class="r">got away</div>`
-      : `<div class="s">❓</div><div class="n">???</div><div class="r">not caught</div>`;
+    // the index shows every Octomon's name and types whether or not you have caught it —
+    // Asher asked to "see what you need and what types they are", so nothing is hidden
+    el.innerHTML =
+      `<div class="s${got ? '' : ' shadow'}">${d.sprite}</div>` +
+      `<div class="n">${d.name}</div>` +
+      typeChips(d) +
+      `<div class="r">${got ? 'Lv.' + (levels[d.id] || 1) + ' · caught' : gotAway ? 'got away' : 'not caught'}</div>` +
+      `<div class="w">${homeOf(d)} · pays ${d.pay}</div>`;
     box.appendChild(el);
   });
-  for (let i = POOL.length; i < LOG_SLOTS; i++) {   // the slots Asher has still to design
+  // the ones Asher has designed but that are not in the world yet
+  const soon = $('soon'); soon.innerHTML = '';
+  COMING.forEach(d => {
     const el = document.createElement('div');
-    el.className = 'card empty';
-    el.innerHTML = `<div class="s">✏️</div><div class="n">TO DESIGN</div><div class="r">Asher's slot</div>`;
-    box.appendChild(el);
-  }
+    el.className = 'card soon';
+    el.innerHTML = `<div class="s shadow">${d.sprite}</div><div class="n">${d.name}</div>` +
+      typeChips(d) + `<div class="r">${d.rarity} · not in the game yet</div>` +
+      `<div class="w">${d.soon}</div>`;
+    soon.appendChild(el);
+  });
   const left = POOL.filter(d => !caught.has(d.id));
   const away = left.filter(d => missed.has(d.id)).length;
   $('logNote').textContent =
     left.length === 0 ? 'Every Octomon caught. Octo Champion.'
-    : (left.length === 1 && left[0].lastOne) ? 'Only the Rage Monster left. He is in the Deep Forest.'
-    : `${logCount()} caught, ${left.length} still out there` + (away ? ` — ${away} got away.` : '.');
+    : (left.length === 1 && left[0].lastOne) ? 'Only the Rage Monster left. He is in the Deep Dark Forest.'
+    : `${logCount()} caught, ${left.length} still to find` + (away ? ` — ${away} got away.` : '.');
 }
 function hudLog() { $('hCaught').textContent = logCount(); }
 function hudMoney() {
@@ -1233,7 +1420,7 @@ function encounter(sp) {
   mine = null; spent = new Set(); $('mine').classList.add('hide'); hideTeam();
   const el = $('fSprite'); el.className = 'sprite'; el.textContent = foe.sprite;
   $('fName').textContent = 'Wild ' + foe.name;
-  $('fTag').textContent = foe.biome + ' · ' + foe.rarity;
+  $('fTag').textContent = typeLine(foe) + ' · ' + foe.rarity;
   $('log').innerHTML = '';
   say('A wild ' + foe.name + ' appears!', true);
   if (foe.move === 'wall') { foe.wall = true; say('Mr. Crab Pants builds a SAND WALL!'); }
@@ -1435,6 +1622,7 @@ async function throwBall() {
   events.push({ type: 'throw', ball: ball.id, odds: chance, caught });
   for (let i = 0; i < 3; i++) {
     fb.setAttribute('class', ''); void fb.getBoundingClientRect(); fb.setAttribute('class', 'wobble');
+    SOUND.wobble();
     await sleep(520);
   }
   if (caught) {
@@ -1445,16 +1633,62 @@ async function throwBall() {
     return capture();
   }
   fb.setAttribute('class', 'pop'); sp.classList.remove('gone'); quake();
+  SOUND.free();
   say('The ' + foe.name + ' breaks free!');
   await sleep(450); fb.setAttribute('class', '');
   refresh(); foeTurn();
 }
+// ---- Sound -------------------------------------------------------------------------------
+// Asher asked for a sound when you catch one. These are made on the fly with WebAudio rather
+// than loaded from files, so the game still works with no internet from the iPad home screen.
+// iOS will not make a sound until the player has touched the screen once, which by this point
+// they always have, and if anything goes wrong we just stay silent.
+let AC = null;
+function audio() {
+  if (AC === null) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { AC = false; } }
+  if (AC && AC.state === 'suspended') AC.resume().catch(() => {});
+  return AC || null;
+}
+function beep(freq, at, len, vol = 0.18, type = 'square') {
+  const ac = audio(); if (!ac) return;
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, ac.currentTime + at);
+  g.gain.setValueAtTime(0.0001, ac.currentTime + at);
+  g.gain.exponentialRampToValueAtTime(vol, ac.currentTime + at + 0.015);
+  g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + at + len);
+  o.connect(g); g.connect(ac.destination);
+  o.start(ac.currentTime + at); o.stop(ac.currentTime + at + len + 0.02);
+}
+const SOUND = {
+  // the catch: a little rising fanfare, the one Asher asked for
+  gotcha() { [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => beep(f, i * 0.09, 0.22, 0.2)); },
+  wobble() { beep(392, 0, 0.07, 0.10, 'triangle'); },
+  free()   { [392, 330, 262].forEach((f, i) => beep(f, i * 0.07, 0.16, 0.14, 'sawtooth')); },
+};
+window.__sound = SOUND;
+window.__gotcha = n => gotcha(n || 'a Test Octomon');
+
+// ---- The GOTCHA! splash ------------------------------------------------------------------
+// Asher played and said: "I could lower its health but I caught it and it didn't [say so] —
+// I think when you catch it, it should say gotcha, so you know you actually got it."
+function gotcha(name) {
+  SOUND.gotcha();
+  const el = $('gotcha');
+  $('gotchaWho').textContent = 'You caught ' + name + '!';
+  el.classList.remove('hide');
+  el.classList.remove('go'); void el.getBoundingClientRect(); el.classList.add('go');
+  clearTimeout(gotcha.t);
+  gotcha.t = setTimeout(() => el.classList.add('hide'), 2100);
+}
+
 async function capture() {
   const first = !caught.has(foe.id);
   caught.add(foe.id);
   missed.delete(foe.id);                      // caught at last: it is no longer one that got away
   levels[foe.id] = (levels[foe.id] || 0) + 1; // every catch of the same one levels it up
-  say('Caught! You caught the ' + foe.name + '.', true);
+  gotcha(foe.name);                           // the big GOTCHA! and its sound
+  say('GOTCHA! You caught the ' + foe.name + '.', true);
+  await sleep(900);                           // let it land before the log fills with lines
   if (first) say(foe.name + ' joins your Octo Log. (' + logCount() + '/' + LOG_SLOTS + ')');
   else say(foe.name + ' levels up! Now Lv.' + levels[foe.id] + '.', true);
   coins += foe.pay || 0;
@@ -1543,8 +1777,13 @@ function showRegion() {   // the banner names whichever region you are standing 
   $('region').textContent = REGIONS[r].name;
   events.push({ type: 'region', name: r });
 }
-function openLog() { drawLog(); $('logScreen').classList.remove('hide'); }
-function closeLog() { $('logScreen').classList.add('hide'); }
+function openLog() { drawLog(); $('logScreen').classList.remove('hide');
+  $('logBtn').classList.add('hide');          // it sits on top of the first card otherwise
+  $('logScreen').scrollTop = 0;
+}
+function closeLog() { $('logScreen').classList.add('hide');
+  if (scene === 'play') $('logBtn').classList.remove('hide');
+}
 $('logBtn').addEventListener('click', openLog);
 $('logClose').addEventListener('click', closeLog);
 $('shopClose').addEventListener('click', closeShop);
@@ -1775,6 +2014,7 @@ function drawFrame() {
       c.sprite.scale.set(s * (1 - b * 0.03), s * (1 + b * 0.05), s * (1 - b * 0.03));
       c.sprite.position.y = (b * 0.5 + 0.5) * 0.05;
       c.sprite.rotation.y = Math.atan2(P.x - c.x, P.z - c.z) + Math.sin(c.t * 0.9) * 0.12;
+      flap(c.sprite, c.t);
     } else {
       const s = tune.creatureSize * Math.max(0.01, pop);
       c.sprite.scale.set(s * (1 - b * 0.02), s * (1 + b * 0.04), 1);
@@ -1828,6 +2068,8 @@ window.game = {
   get state() { return state; },
   get player() { return { x: P.x, z: P.z, yaw: camYaw }; },
   get creature() { return creature && { id: creature.d.id, x: creature.x, z: creature.z }; },
+  get types() { return { all: ALL_TYPES,
+    each: [...POOL, ...COMING].map(d => ({ id: d.id, types: typesOf(d), line: typeLine(d) })) }; },
   get fight() { return { open: meeting, busy, balls: ballCount(), bag: { ...bag }, pick, turns, foe: foe && { hp: foe.hp, maxHp: foe.maxHp }, odds: foe ? odds() : 0 }; },
   meet() { if (creature && !meeting) meet(); },
   weaken, throwBall, flee,
@@ -1885,7 +2127,12 @@ if (scene === 'figures') { // every Octomon side by side, in play's look — for
   camera.lookAt(mid, only.length ? 1.6 : 0.7, row);
   scenes.figures.update = dt => {
     state.t += dt;
-    figs.forEach((m, i) => { m.rotation.y = state.t * 0.5 + i * 0.3; });   // turn slowly so all sides show
+    // a few, close up: hold them facing front so the shape can be judged; the whole line-up
+    // turns slowly so every side shows
+    figs.forEach((m, i) => {
+      m.rotation.y = only.length ? 0 : state.t * 0.5 + i * 0.3;
+      flap(m, state.t + i);
+    });
   };
 }
 last = clock.now();

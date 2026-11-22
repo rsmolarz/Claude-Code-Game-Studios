@@ -1,7 +1,7 @@
 // PROTOTYPE - NOT FOR PRODUCTION
 // Offline cache for OCTOMON 3D, so it plays from the iPad home screen with no internet.
 // Bump VERSION whenever a cached file changes; the old cache is deleted on activate.
-const VERSION = 'octomon-3d-v10';   // bumped: the 3D models, Asher's new Octoballs, St. Pirate redrawn, Harper's Swoopy
+const VERSION = 'octomon-3d-v11';   // bumped: Asher's types and index, GOTCHA!, the peg leg, the bird, glowing eyes
 const FILES = [
   './',
   './index.html',
